@@ -1,0 +1,7 @@
+# /target
+# **/*.rs.bk
+
+# Ignore all directories
+*/
+# Except src directory
+!/src

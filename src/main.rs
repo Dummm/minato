@@ -1,0 +1,92 @@
+extern crate clap;
+use clap::{crate_name, crate_version, App, Arg};
+// extern crate nix;
+// extern crate pretty_env_logger;
+
+// extern crate ipaddress;
+// extern crate num;
+// extern crate rand;
+
+use log::*;
+// use log::Level;
+
+// use nix::sched::*;
+// use nix::{Error, Result};
+// use nix::sched::clone;
+// use nix::unistd::{chdir, execve, mkdir, pivot_root, sethostname};
+// use nix::mount::*;
+// use std::ffi::CString;
+
+// use std::time;
+// use std::thread;
+
+// use nix::sys::stat;
+// use nix::sys::wait::waitpid;
+use minato::Config;
+// use minato::Process;
+
+mod image;
+mod image_manager;
+use image::Image;
+
+use std::process;
+// use std::ffi::CString;
+
+
+fn main() {
+    env_logger::init();
+
+    let args = App::new(crate_name!())
+        .version(crate_version!())
+        .about("container runtime")
+        .arg(
+            Arg::with_name("rootfs")
+                .required(true)
+                .short("r")
+                .long("rootfs")
+                .multiple(false)
+                .takes_value(true)
+                .help("Path of the container root file system"),
+        )
+        .arg(
+            Arg::with_name("cmd")
+                .short("c")
+                .long("cmd")
+                .multiple(false)
+                .default_value("/bin/sh")
+                .help("Command executed on container creation"),
+        );
+
+
+
+    let config = Config::new(args).unwrap();
+    info!("using rootfs: {}", config.root_filesystem);
+    info!("using command: {}", config.command);
+
+    let mut image = Image::new("library/ubuntu");
+    if let Err(e) = image_manager::pull(&mut image) {
+        error!("image pulling unsuccessful: {}", e);
+        process::exit(1);
+    }
+
+    // let process = Process::new(
+    //     vec_cstr![command],
+    //     format!("{}/{}/rootfs", container_dir, container.id),
+    //     become_daemon,
+    //     // Example environment
+    //     vec_cstr![
+    //         "PATH=/bin/:/usr/bin/:/usr/local/bin:/sbin:/usr/sbin",
+    //         "TERM=xterm-256color",
+    //         "LC_ALL=C"
+    //     ],
+    // );
+
+    // if sub_m.is_present("del") {
+    //     container
+    //         .delete(&process)
+    //         .expect("Failed to remove container: ");
+    // }
+
+    // container.prepare(&process);
+    // container.run(&process);
+}
