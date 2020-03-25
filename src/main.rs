@@ -1,5 +1,5 @@
 extern crate clap;
-use clap::{crate_name, crate_version, App, Arg};
+use clap::{crate_name, crate_version, App, Arg, SubCommand};
 // extern crate nix;
 // extern crate pretty_env_logger;
 
@@ -39,29 +39,70 @@ fn main() {
     let args = App::new(crate_name!())
         .version(crate_version!())
         .about("container runtime")
-        .arg(
-            Arg::with_name("rootfs")
-                .required(true)
-                .short("r")
-                .long("rootfs")
-                .multiple(false)
-                .takes_value(true)
-                .help("Path of the container root file system"),
+        .subcommand(SubCommand::with_name("image")
+            .about("manage images")
+            .subcommand(SubCommand::with_name("pull")
+                .about("pull image from docker repository")
+                .arg(
+                    Arg::with_name("image_name")
+                        .help("specify image name")
+                        .short("n")
+                        .long("name")
+                        .takes_value(true)
+                        .required(true)
+                        .multiple(false),
+                )
+            )
         )
-        .arg(
-            Arg::with_name("cmd")
-                .short("c")
-                .long("cmd")
-                .multiple(false)
-                .default_value("/bin/sh")
-                .help("Command executed on container creation"),
+        .subcommand(SubCommand::with_name("container")
+            .about("manage containers")
+            .subcommand(SubCommand::with_name("run")
+                .about("run container")
+                .arg(
+                    Arg::with_name("container_name")
+                        .help("specify container name")
+                        .short("n")
+                        .long("name")
+                        .takes_value(true)
+                        .required(true)
+                        .multiple(false),
+                )
+            )
+            .subcommand(SubCommand::with_name("create")
+                .about("create container")
+                .arg(
+                    Arg::with_name("container_name")
+                        .help("specify container name")
+                        .short("n")
+                        .long("name")
+                        .takes_value(true)
+                        .required(true)
+                        .multiple(false),
+                )
+                // .arg(
+                //     Arg::with_name("rootfs")
+                //         .required(true)
+                //         .short("r")
+                //         .long("rootfs")
+                //         .multiple(false)
+                //         .takes_value(true)
+                //         .help("Path of the container root file system"),
+                // )
+                // .arg(
+                //     Arg::with_name("cmd")
+                //         .short("c")
+                //         .long("cmd")
+                //         .multiple(false)
+                //         .default_value("/bin/sh")
+                //         .help("Command executed on container creation"),
+                // )
+            )
         );
 
-
-
-    let config = Config::new(args).unwrap();
-    info!("using rootfs: {}", config.root_filesystem);
-    info!("using command: {}", config.command);
+    // TODO: Parse arguments
+    // let config = Config::new(args).unwrap();
+    // info!("using rootfs: {}", config.root_filesystem);
+    // info!("using command: {}", config.command);
 
     let mut image = Image::new("library/ubuntu");
     if let Err(e) = image_manager::pull(&mut image) {
