@@ -1,4 +1,4 @@
-use std::fs::{self, File};
+use std::fs;
 use std::io::prelude::*;
 use std::io;
 use std::iter;
@@ -6,12 +6,7 @@ use std::path::Path;
 use std::os::unix;
 use std::process::Command;
 
-use nix::sched::{unshare, CloneFlags};
-use nix::sys::wait::{waitpid, WaitStatus};
-use nix::unistd::{chdir, chroot, daemon, fork, getpid, ForkResult, Gid, Uid};
-use nix::unistd::{execve, sethostname};
-
-use dirs::home_dir;
+use dirs;
 
 // for generate container.id
 use rand::distributions::Alphanumeric;
@@ -60,35 +55,6 @@ impl Container {
     }
 }
 
-// fn uid_map(uid: Uid) -> std::io::Result<()> {
-//     let mut uid_map_file = File::create("/proc/self/uid_map")?;
-//     let uid_map = format!("0 {} 1", uid);
-
-//     uid_map_file.write_all(uid_map.as_bytes())?;
-//     info!("[Host] wrote {} /proc/self/uid_map", uid_map);
-//     Ok(())
-// }
-
-// fn gid_map(gid: Gid) -> std::io::Result<()> {
-//     let mut setgroups_file = File::create("/proc/self/setgroups")?;
-//     setgroups_file.write_all(b"deny")?;
-
-//     let mut gid_map_file = File::create("/proc/self/gid_map")?;
-//     info!("[Host] open(2) /proc/self/gid_map done.");
-//     let gid_map = format!("0 {} 1", gid);
-
-//     gid_map_file.write_all(gid_map.as_bytes())?;
-//     info!("[Host] wrote {} /proc/self/gid_map", gid_map);
-//     Ok(())
-// }
-
-// fn guid_map(&self, process: &Process) -> std::io::Result<()> {
-//     self.uid_map(process.host_uid)
-//         .expect("Failed to write uid_map");
-//     self.gid_map(process.host_gid)
-//         .expect("Failed to write gid_map");
-//     Ok(())
-// }
 
 pub fn create_directory_structure(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
     info!("creating container directory structure...");

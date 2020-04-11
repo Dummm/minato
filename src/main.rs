@@ -1,29 +1,6 @@
 extern crate clap;
 use clap::{crate_name, crate_version, App, Arg, SubCommand};
-// extern crate nix;
-// extern crate pretty_env_logger;
-
-// extern crate ipaddress;
-// extern crate num;
-// extern crate rand;
-
 use log::*;
-// use log::Level;
-
-// use nix::sched::*;
-// use nix::{Error, Result};
-// use nix::sched::clone;
-// use nix::unistd::{chdir, execve, mkdir, pivot_root, sethostname};
-// use nix::mount::*;
-// use std::ffi::CString;
-
-// use std::time;
-// use std::thread;
-
-// use nix::sys::stat;
-// use nix::sys::wait::waitpid;
-// use minato::Config;
-// use minato::Process;
 
 mod image;
 mod image_manager;
@@ -32,7 +9,6 @@ use image::Image;
 mod container_manager;
 
 use std::process;
-// use std::ffi::CString;
 
 // TODO: Modularize project
 fn main() {
@@ -112,7 +88,7 @@ fn main() {
         process::exit(1);
     }
 
-    let mut container = container_manager::Container::new(Some(image), Some("cont"));
+    let container = container_manager::Container::new(Some(image), Some("cont"));
     if let Err(e) = container_manager::create(&container) {
         error!("container creation unsuccessful: {}", e);
         process::exit(1);
@@ -123,24 +99,4 @@ fn main() {
         process::exit(1);
     };
 
-    // let process = Process::new(
-    //     vec_cstr![command],
-    //     format!("{}/{}/rootfs", container_dir, container.id),
-    //     become_daemon,
-    //     // Example environment
-    //     vec_cstr![
-    //         "PATH=/bin/:/usr/bin/:/usr/local/bin:/sbin:/usr/sbin",
-    //         "TERM=xterm-256color",
-    //         "LC_ALL=C"
-    //     ],
-    // );
-
-    // if sub_m.is_present("del") {
-    //     container
-    //         .delete(&process)
-    //         .expect("Failed to remove container: ");
-    // }
-
-    // container.prepare(&process);
-    // container.run(&process);
 }
