@@ -11,7 +11,6 @@ use reqwest;
 use serde_json::{self, Value};
 use dirs;
 
-
 use crate::image::Image;
 
 fn get_authentication_token(auth_url: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -53,7 +52,7 @@ fn get_filesystem_layers(token: &str, manifests_url: &str) -> Result<Vec<Value>,
     Ok(fs_layers.clone())
 }
 
-fn get_image_path(image: &Image) -> Result<String, Box<dyn std::error::Error>> {
+pub fn get_image_path(image: &Image) -> Result<String, Box<dyn std::error::Error>> {
     let home = match dirs::home_dir() {
         Some(path) => path,
         None       => return Err("error getting home directory".into())
@@ -95,7 +94,9 @@ fn download_layer(image: &mut Image, token: &str, fs_layer: &Value) -> Result<()
     Ok(())
 }
 
-pub fn unpack_image_layers(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
+
+// TODO: Change the way unpacking is skipped
+fn unpack_image_layers(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
     info!("unpacking image layers...");
 
     for fs_layer in &image.fs_layers {
@@ -113,18 +114,19 @@ pub fn unpack_image_layers(image: &mut Image) -> Result<(), Box<dyn std::error::
         let mut archive = Archive::new(tar);
 
         if !Path::new(layer_path.as_str()).exists() {
-            info!("mkdir {}", layer_path);
             fs::create_dir_all(layer_path.clone())?;
+            archive.unpack(layer_path)?;
+            info!("unpacked layer {}", fs_layer);
+        } else {
+            info!("layer {} exists, unpacking skipped", fs_layer);
         }
 
-        archive.unpack(layer_path)?;
-        info!("unpacked layer {}", fs_layer);
     }
 
     Ok(())
 }
 
-pub fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
+fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
     info!("cleaning up image directory...");
 
     for fs_layer in &image.fs_layers {

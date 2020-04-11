@@ -22,17 +22,19 @@ use log::*;
 
 // use nix::sys::stat;
 // use nix::sys::wait::waitpid;
-use minato::Config;
+// use minato::Config;
 // use minato::Process;
 
 mod image;
 mod image_manager;
 use image::Image;
 
+mod container_manager;
+
 use std::process;
 // use std::ffi::CString;
 
-
+// TODO: Modularize project
 fn main() {
     env_logger::init();
 
@@ -109,6 +111,17 @@ fn main() {
         error!("image pulling unsuccessful: {}", e);
         process::exit(1);
     }
+
+    let mut container = container_manager::Container::new(Some(image), Some("cont"));
+    if let Err(e) = container_manager::create(&container) {
+        error!("container creation unsuccessful: {}", e);
+        process::exit(1);
+    };
+
+    if let Err(e) = container_manager::run(&container) {
+        error!("container run unsuccessful: {}", e);
+        process::exit(1);
+    };
 
     // let process = Process::new(
     //     vec_cstr![command],
