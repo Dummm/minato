@@ -1,8 +1,6 @@
 use std::fs::{self, File};
 use std::path::Path;
 use std::io;
-// use std::io::{self, Error, ErrorKind};
-// use std::error;
 
 use log::info;
 use tar::Archive;
