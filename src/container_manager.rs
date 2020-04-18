@@ -6,21 +6,21 @@ use std::path::Path;
 use std::os::unix;
 use std::process::Command;
 
-use dirs;
+use nix::mount::*;
+use nix::sched::*;
+use nix::unistd::{chdir, execve, mkdir, pivot_root, sethostname};
+use nix::sys::stat;
+use nix::sys::wait::waitpid;
 
+use dirs;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
-use log::info;
+use log::{info, error};
+use std::ffi::CString;
 
 use super::image::Image;
 use super::image_manager;
-
-pub struct Container {
-    pub id: String,
-    pub image: Option<Image>,
-    pub state: State,
-}
 
 #[derive(Debug, PartialEq)]
 pub enum State {
@@ -28,6 +28,12 @@ pub enum State {
     Created(u32),
     Running(u32),
     Stopped,
+}
+
+pub struct Container {
+    pub id: String,
+    pub image: Option<Image>,
+    pub state: State,
 }
 
 impl Container {
@@ -116,7 +122,6 @@ fn mount_container_filesystem(container: &Container)  -> Result<(), Box<dyn std:
     let subdirectories = container_path.join("lower").read_dir()?;
     let subdirectories_vector = subdirectories
         .map(|dir| format!("{}", dir.unwrap().path().display()))
-        // .map(|dir| format!("lower/{:?}", dir.unwrap().file_name()))
         .collect::<Vec<String>>();
     let subdirectories_str = subdirectories_vector.join(":");
     lowerdir_arg.push_str(subdirectories_str.as_str());
@@ -148,8 +153,126 @@ pub fn run(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
 
     mount_container_filesystem(container)?;
 
+    info!("making host mount namespace private...");
+    mount(
+        None::<&str>,
+        "/",
+        None::<&str>,
+        MsFlags::MS_REC | MsFlags::MS_PRIVATE,
+        None::<&str>,
+    )?;
+
+
+    info!("performing bind mount on container filesystem...");
+    let home = match dirs::home_dir() {
+        Some(path) => path,
+        None       => return Err("error getting home directory".into())
+    };
+    let rootfs_path_str = format!(
+        "{}/.minato/containers/{}/merged",
+        home.display(), container.id
+    );
+    let rootfs = Path::new(rootfs_path_str.as_str());
+
+    info!("cloning process...");
+    let cb = Box::new(|| {
+        if let Err(e) = init(rootfs_path_str.as_str()) {
+            error!("unable to initialize container: {}", e);
+            -1
+        } else {
+            0
+        }
+    });
+    let stack = &mut [0; 1024 * 1024];
+    let clone_flags =
+        CloneFlags::CLONE_NEWUTS |
+        CloneFlags::CLONE_NEWPID |
+        CloneFlags::CLONE_NEWNS |
+        CloneFlags::CLONE_NEWIPC |
+        CloneFlags::CLONE_NEWNET;
+
+    let childpid = clone(
+        cb,
+        stack,
+        clone_flags,
+        None
+    )?;
+
+    waitpid(childpid, None)?;
+
+    Ok(())
+}
+
+fn init(rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
+    info!("initiating container...");
+
+    info!("making root private...");
+    mount(
+        Some(rootfs),
+        rootfs,
+        None::<&str>,
+        MsFlags::MS_BIND | MsFlags::MS_REC,
+        None::<&str>,
+    )?;
+
+    info!("removing old 'put_old' folder...");
+    let prev_rootfs = Path::new(rootfs).join("put_old");
+    if prev_rootfs.exists() {
+        std::fs::remove_dir_all(&prev_rootfs)?;
+    }
+
+    info!("making new 'put_old' folder...");
+    mkdir(
+        &prev_rootfs,
+        stat::Mode::S_IRWXU | stat::Mode::S_IRWXG | stat::Mode::S_IRWXO,
+    )?;
+
+    info!("pivoting root...");
+    pivot_root(rootfs, &prev_rootfs)?;
+    chdir("/")?;
+    umount2("/put_old", MntFlags::MNT_DETACH)?;
+
+    info!("mounting proc...");
+    mount(
+        Some("proc"),
+        "/proc",
+        Some("proc"),
+        MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_RELATIME,
+        None::<&str>,
+    )?;
+
+    info!("mounting tmpfs...");
+    mount(
+        Some("tmpfs"),
+        "/dev",
+        Some("tmpfs"),
+        MsFlags::MS_NOSUID | MsFlags::MS_RELATIME,
+        None::<&str>,
+    )?;
+
+    info!("executing command...");
+    do_exec("/bin/sh")?;
+
+    info!("exit...");
     Ok(())
 }
 
 
+fn do_exec(cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let args = &[Path::new(cmd).file_stem().unwrap().to_str().unwrap()];
+    let envs = &["PATH=/bin:/sbin:/usr/bin:/usr/sbin"];
+    let p = CString::new(cmd).unwrap();
 
+    let a: Vec<CString> = args.iter()
+        .map(|s| CString::new(s.to_string()).unwrap_or_default())
+        .collect();
+    let e: Vec<CString> = envs.iter()
+        .map(|s| CString::new(s.to_string()).unwrap_or_default())
+        .collect();
+
+    info!("{:?}", args);
+    info!("{:?}", envs);
+    info!("{:?}", p);
+    execve(&p, &a, &e).unwrap();
+    Ok(())
+}
