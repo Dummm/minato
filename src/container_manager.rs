@@ -12,6 +12,8 @@ use nix::unistd::{chdir, execve, mkdir, pivot_root, sethostname};
 use nix::sys::stat;
 use nix::sys::wait::waitpid;
 
+use std::time;
+use std::thread;
 use dirs;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
@@ -198,6 +200,8 @@ pub fn run(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
         None
     )?;
 
+
+    thread::sleep(time::Duration::from_millis(300));
     waitpid(childpid, None)?;
 
     Ok(())
@@ -250,6 +254,7 @@ fn init(rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
         None::<&str>,
     )?;
 
+    sethostname("test")?;
     info!("executing command...");
     do_exec("/bin/sh")?;
 
