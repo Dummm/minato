@@ -3,10 +3,10 @@ use std::path::Path;
 use std::io;
 
 use log::info;
-use tar::Archive;
-use flate2::read::GzDecoder;
 use reqwest;
 use serde_json::{self, Value};
+use tar::Archive;
+use flate2::read::GzDecoder;
 use dirs;
 
 use crate::image::Image;
@@ -17,10 +17,6 @@ fn get_authentication_token(auth_url: &str) -> Result<String, Box<dyn std::error
     let response = reqwest::blocking::get(auth_url)?;
     let response_text = response.text()?;
     let body: Value = serde_json::from_str(response_text.as_str())?;
-    // let body: Value = serde_json::from_str(response_text.as_str()) {
-    //     Ok(body) => body,
-    //     Err(_)   => return Err("json parsing failed".to_string())
-    // };
     info!("parsed json successfully");
 
     let token = match &body["token"] {
@@ -46,10 +42,12 @@ fn get_filesystem_layers(token: &str, manifests_url: &str) -> Result<Vec<Value>,
         Value::Array(fs_layers) => fs_layers,
         _ => return Err("filesystem layers retrieval failed".into()),
     };
+    info!("retrieved fs_layers successfully");
 
     Ok(fs_layers.clone())
 }
 
+// TODO: Move to utils/helpers
 pub fn get_image_path(image: &Image) -> Result<String, Box<dyn std::error::Error>> {
     let home = match dirs::home_dir() {
         Some(path) => path,
@@ -88,6 +86,7 @@ fn download_layer(image: &mut Image, token: &str, fs_layer: &Value) -> Result<()
     } else {
         return Err("blobSum not found".into());
     }
+    info!("downloaded layer successfully");
 
     Ok(())
 }
@@ -115,10 +114,11 @@ fn unpack_image_layers(image: &mut Image) -> Result<(), Box<dyn std::error::Erro
             archive.unpack(layer_path)?;
             info!("unpacked layer {}", fs_layer);
         } else {
-            info!("layer {} exists, unpacking skipped", fs_layer);
+            info!("layer {} exists, skipping unpack", fs_layer);
         }
 
     }
+    info!("unpacked layers successfully");
 
     Ok(())
 }
@@ -137,13 +137,16 @@ fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> 
             layer_path
         );
 
+        // TODO: Check if file exists?
         fs::remove_file(tar_path)?;
         info!("removed archive layer {}", fs_layer);
     }
 
+    info!("cleaned up successfully");
     Ok(())
 }
 
+// TODO: Modularize
 pub fn pull(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
     info!("pulling image...");
 

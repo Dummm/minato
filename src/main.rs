@@ -1,3 +1,5 @@
+use std::process;
+
 extern crate clap;
 use clap::{crate_name, crate_version, App, Arg, SubCommand};
 use log::*;
@@ -5,12 +7,13 @@ use log::*;
 mod image;
 mod image_manager;
 use image::Image;
-
+mod container;
 mod container_manager;
+use container::Container;
 
-use std::process;
 
 // TODO: Modularize project
+// TODO: Switch overlay mounting method if root is required
 fn main() {
     env_logger::init();
 
@@ -88,7 +91,7 @@ fn main() {
         process::exit(1);
     }
 
-    let container = container_manager::Container::new(Some(image), Some("cont"));
+    let container = Container::new(Some(image), Some("cont"));
     if let Err(e) = container_manager::create(&container) {
         error!("container creation unsuccessful: {}", e);
         process::exit(1);

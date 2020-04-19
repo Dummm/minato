@@ -1,77 +1,39 @@
 use std::fs;
-use std::io::prelude::*;
-use std::io;
-use std::iter;
+use std::io::{self, prelude::*};
 use std::path::Path;
 use std::os::unix;
 use std::process::Command;
-
+use std::time;
+use std::thread;
+use std::ffi::CString;
 use nix::mount::*;
 use nix::sched::*;
 use nix::unistd::{chdir, execve, mkdir, pivot_root, sethostname};
-use nix::sys::stat;
-use nix::sys::wait::waitpid;
+use nix::sys::{stat, wait::waitpid};
 
-use std::time;
-use std::thread;
 use dirs;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
-
 use log::{info, error};
-use std::ffi::CString;
 
-use super::image::Image;
-use super::image_manager;
+use crate::image_manager;
+use crate::container::Container;
 
-#[derive(Debug, PartialEq)]
-pub enum State {
-    Creating,
-    Created(u32),
-    Running(u32),
-    Stopped,
-}
-
-pub struct Container {
-    pub id: String,
-    pub image: Option<Image>,
-    pub state: State,
-}
-
-impl Container {
-    pub fn new(image: Option<Image>, container_id: Option<&str>) -> Container {
-        let id: String = match container_id {
-            Some(id) => id.to_string(),
-            None => {
-                let mut rng = thread_rng();
-                iter::repeat(())
-                    .map(|()| rng.sample(Alphanumeric))
-                    .take(8)
-                    .collect::<String>()
-            }
-        };
-
-        Container {
-            id,
-            image,
-            state: State::Stopped,
-        }
-    }
-}
-
-
-pub fn create_directory_structure(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
-    info!("creating container directory structure...");
-
+// TODO: Move to utils/helpers
+pub fn get_container_path(container: &Container) -> Result<String, Box<dyn std::error::Error>> {
     let home = match dirs::home_dir() {
         Some(path) => path,
         None       => return Err("error getting home directory".into())
     };
 
-    let container_path_str = format!(
+    Ok(format!(
         "{}/.minato/containers/{}",
         home.display(), container.id
-    );
+    ))
+}
+
+fn create_directory_structure(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
+    info!("creating container directory structure...");
+
+    let container_path_str = get_container_path(container)?;
     let container_path = Path::new(container_path_str.as_str());
     if !container_path.exists() {
         fs::create_dir_all(container_path.clone())?;
@@ -100,15 +62,7 @@ fn generate_config_json() -> Result<(), Box<dyn std::error::Error>> {
 pub fn create(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
     info!("creating container '{}'...", container.id);
 
-    let home = match dirs::home_dir() {
-        Some(path) => path,
-        None       => return Err("error getting home directory".into())
-    };
-
-    let container_path_str = format!(
-        "{}/.minato/containers/{}",
-        home.display(), container.id
-    );
+    let container_path_str = get_container_path(container)?;
     if Path::new(container_path_str.as_str()).exists() {
         info!("container exists. skipping creation...");
         return Ok(())
@@ -123,14 +77,7 @@ pub fn create(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
 fn mount_container_filesystem(container: &Container)  -> Result<(), Box<dyn std::error::Error>> {
     info!("mounting container filesystem...");
 
-    let home = match dirs::home_dir() {
-        Some(path) => path,
-        None       => return Err("error getting home directory".into())
-    };
-    let container_path_str = format!(
-        "{}/.minato/containers/{}",
-        home.display(), container.id
-    );
+    let container_path_str = get_container_path(container)?;
     let container_path = Path::new(container_path_str.as_str());
 
     // TODO: Fix this mess
@@ -180,15 +127,10 @@ pub fn run(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
 
 
     info!("performing bind mount on container filesystem...");
-    let home = match dirs::home_dir() {
-        Some(path) => path,
-        None       => return Err("error getting home directory".into())
-    };
     let rootfs_path_str = format!(
-        "{}/.minato/containers/{}/merged",
-        home.display(), container.id
+        "{}/merged",
+        get_container_path(container)?
     );
-    let rootfs = Path::new(rootfs_path_str.as_str());
 
     info!("cloning process...");
     let cb = Box::new(|| {
@@ -199,6 +141,7 @@ pub fn run(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
             0
         }
     });
+    // TODO: Check if modifications are required
     let stack = &mut [0; 1024 * 1024];
     let clone_flags =
         CloneFlags::CLONE_NEWUTS |
@@ -206,7 +149,6 @@ pub fn run(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
         CloneFlags::CLONE_NEWNS |
         CloneFlags::CLONE_NEWIPC |
         CloneFlags::CLONE_NEWNET;
-
     let childpid = clone(
         cb,
         stack,
@@ -269,6 +211,7 @@ fn init(rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
         None::<&str>,
     )?;
 
+    // TODO: Change from literals to variables
     sethostname("test")?;
     do_exec("/bin/sh")?;
     // do_exec("/bin/bash")?;
@@ -278,6 +221,8 @@ fn init(rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 
 fn do_exec(cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
+    info!("preparing command execution...");
+
     let args = &[Path::new(cmd).file_stem().unwrap().to_str().unwrap()];
     let envs = &["PATH=/bin:/sbin:/usr/bin:/usr/sbin"];
     let p = CString::new(cmd).unwrap();
