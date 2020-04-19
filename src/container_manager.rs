@@ -100,6 +100,20 @@ fn generate_config_json() -> Result<(), Box<dyn std::error::Error>> {
 pub fn create(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
     info!("creating container '{}'...", container.id);
 
+    let home = match dirs::home_dir() {
+        Some(path) => path,
+        None       => return Err("error getting home directory".into())
+    };
+
+    let container_path_str = format!(
+        "{}/.minato/containers/{}",
+        home.display(), container.id
+    );
+    if Path::new(container_path_str.as_str()).exists() {
+        info!("container exists. skipping creation...");
+        return Ok(())
+    }
+
     generate_config_json()?;
     create_directory_structure(container)?;
 
@@ -200,10 +214,11 @@ pub fn run(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
         None
     )?;
 
-
+    info!("child pid: {}", childpid);
     thread::sleep(time::Duration::from_millis(300));
     waitpid(childpid, None)?;
 
+    info!("run successfull");
     Ok(())
 }
 
@@ -255,10 +270,9 @@ fn init(rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     sethostname("test")?;
-    info!("executing command...");
     do_exec("/bin/sh")?;
+    // do_exec("/bin/bash")?;
 
-    info!("exit...");
     Ok(())
 }
 
@@ -275,9 +289,11 @@ fn do_exec(cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| CString::new(s.to_string()).unwrap_or_default())
         .collect();
 
+    info!("executing command...");
     info!("{:?}", args);
     info!("{:?}", envs);
     info!("{:?}", p);
-    execve(&p, &a, &e).unwrap();
+    execve(&p, &a, &e)?;
+
     Ok(())
 }

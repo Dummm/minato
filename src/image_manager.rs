@@ -92,7 +92,6 @@ fn download_layer(image: &mut Image, token: &str, fs_layer: &Value) -> Result<()
     Ok(())
 }
 
-
 // TODO: Change the way unpacking is skipped
 fn unpack_image_layers(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
     info!("unpacking image layers...");
@@ -146,6 +145,14 @@ fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> 
 }
 
 pub fn pull(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
+    info!("pulling image...");
+
+    let image_path = get_image_path(image)?;
+    if Path::new(image_path.as_str()).exists() {
+        info!("image exists. skipping pull...");
+        return Ok(())
+    }
+
     let authentication_url = format!(
         "https://auth.docker.io/token?service=registry.docker.io&scope=repository:{}:pull",
         image.name

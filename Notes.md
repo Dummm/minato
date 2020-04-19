@@ -19,3 +19,6 @@ Manager-ul de containere trebuie sa:
   - [x] Faca pivot_root peste noul filesystem (sau chroot)
   - [x] chdir pe /
   - [ ] Sa faca clean-up la final
+
+  ### Bugs
+  - [ ] Iesirea din sh (probabil ca nu mai are output)
