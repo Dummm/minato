@@ -9,6 +9,9 @@ use tar::Archive;
 use flate2::read::GzDecoder;
 use dirs;
 
+extern crate clap;
+use clap::ArgMatches;
+
 use crate::image::Image;
 
 fn get_authentication_token(auth_url: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -64,10 +67,10 @@ fn download_layer(image: &mut Image, token: &str, fs_layer: &Value) -> Result<()
     if let Value::String(blob_sum) = &fs_layer["blobSum"] {
         let digest = blob_sum.replace("sha256:", "");
         // let digest = blob_sum.split_off(blob_sum.find(':')?);
-        let image_path = get_image_path(image)?;
+        let image_path_str = get_image_path(image)?;
         let tar_path = format!(
             "{}/{}.tar.gz",
-            image_path, digest
+            image_path_str, digest
         );
 
         image.fs_layers.push(digest.clone());
@@ -96,10 +99,10 @@ fn unpack_image_layers(image: &mut Image) -> Result<(), Box<dyn std::error::Erro
     info!("unpacking image layers...");
 
     for fs_layer in &image.fs_layers {
-        let image_path = get_image_path(image)?;
+        let image_path_str = get_image_path(image)?;
         let layer_path = format!(
             "{}/{}",
-            image_path, fs_layer
+            image_path_str, fs_layer
         );
         let tar_path = format!(
             "{}.tar.gz",
@@ -127,10 +130,10 @@ fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> 
     info!("cleaning up image directory...");
 
     for fs_layer in &image.fs_layers {
-        let image_path = get_image_path(image)?;
+        let image_path_str = get_image_path(image)?;
         let layer_path = format!(
             "{}/{}",
-            image_path, fs_layer
+            image_path_str, fs_layer
         );
         let tar_path = format!(
             "{}.tar.gz",
@@ -146,12 +149,40 @@ fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
+// TODO: Move to utils & clean-up mess
+pub fn load_image(image_name: &str) -> Result<Option<Image>, Box<dyn std::error::Error>> {
+    let mut image = Image::new(image_name);
+    let image_path_str = get_image_path(&image)?;
+    let image_path = Path::new(image_path_str.as_str());
+
+    if !image_path.exists() {
+        return Ok(None)
+    }
+
+    let layers = image_path.read_dir()?;
+    image.fs_layers = layers
+        .map(|dir| format!("{}",
+            dir.unwrap()
+            .path()
+            .file_name().unwrap()
+            .to_str().unwrap()))
+        .collect::<Vec<String>>()
+        .clone();
+
+    Ok(Some(image))
+}
+
 // TODO: Modularize
-pub fn pull(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
+pub fn pull(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     info!("pulling image...");
 
-    let image_path = get_image_path(image)?;
-    if Path::new(image_path.as_str()).exists() {
+    // TODO: Remove hardcode
+    // let image_name = "library/alpine";
+    let image_name = "library/ubuntu:latest";
+    let mut image = load_image(image_name).unwrap().unwrap();
+
+    let image_path_str = get_image_path(&image)?;
+    if Path::new(image_path_str.as_str()).exists() {
         info!("image exists. skipping pull...");
         return Ok(())
     }
@@ -168,19 +199,18 @@ pub fn pull(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
     );
     let fs_layers = get_filesystem_layers(token.as_str(), manifests_url.as_str())?;
 
-    let image_path = get_image_path(image)?;
     info!("creating image directory...");
-    fs::create_dir_all(image_path)?;
+    fs::create_dir_all(image_path_str)?;
 
     let number_of_layers = fs_layers.len();
     for (index, fs_layer) in fs_layers.iter().enumerate() {
         info!("downloading layer {} out of {}...", index + 1, number_of_layers);
-        download_layer(image, token.as_str(), &fs_layer).expect("download failed");
+        download_layer(&mut image, token.as_str(), &fs_layer).expect("download failed");
     }
 
-    unpack_image_layers(image)?;
+    unpack_image_layers(&mut image)?;
 
-    remove_archives(image)?;
+    remove_archives(&mut image)?;
 
     Ok(())
 }

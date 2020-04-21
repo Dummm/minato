@@ -4,6 +4,7 @@ pub struct Image {
     pub fs_layers: Vec<String>,
 }
 
+// TODO: Control better how layers are added (load automatically)
 impl Image {
     pub fn new(identifiers: &str) -> Image {
         let mut ids: Vec<&str> = identifiers.split(':').collect();

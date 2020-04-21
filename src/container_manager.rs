@@ -13,6 +13,7 @@ use nix::sys::{stat, wait::waitpid};
 
 use dirs;
 use log::{info, error};
+use clap::ArgMatches;
 
 use crate::image_manager;
 use crate::container::Container;
@@ -59,17 +60,31 @@ fn generate_config_json() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn create(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
+pub fn create(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    // TODO: Remove hardcode
+    // let image_name = "library/alpine";
+    let image_name = "library/ubuntu:latest";
+    let mut image = match image_manager::load_image(image_name)? {
+        Some(image) => image,
+        None        => {
+            // TODO: Add functionality
+            info!("image not found");
+            return Ok(())
+        }
+    };
+    let container_name = "cont";
+    let container = Container::new(Some(image), Some(container_name));
+
     info!("creating container '{}'...", container.id);
 
-    let container_path_str = get_container_path(container)?;
+    let container_path_str = get_container_path(&container)?;
     if Path::new(container_path_str.as_str()).exists() {
         info!("container exists. skipping creation...");
         return Ok(())
     }
 
     generate_config_json()?;
-    create_directory_structure(container)?;
+    create_directory_structure(&container)?;
 
     Ok(())
 }
@@ -111,10 +126,24 @@ fn mount_container_filesystem(container: &Container)  -> Result<(), Box<dyn std:
     Ok(())
 }
 
-pub fn run(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
-    info!("running container '{}'...", container.id);
+pub fn run(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    // TODO: Remove hardcode
+    // let image_name = "library/alpine";
+    let image_name = "library/ubuntu:latest";
+    let mut image = match image_manager::load_image(image_name)? {
+        Some(image) => image,
+        None        => {
+            // TODO: Add functionality
+            info!("image not found");
+            return Ok(())
+        }
+    };
+    let container_name = "cont";
+    let container = Container::new(Some(image), Some(container_name));
 
-    mount_container_filesystem(container)?;
+    info!("running container '{}'...", &container.id);
+
+    mount_container_filesystem(&container)?;
 
     info!("making host mount namespace private...");
     mount(
@@ -129,7 +158,7 @@ pub fn run(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
     info!("performing bind mount on container filesystem...");
     let rootfs_path_str = format!(
         "{}/merged",
-        get_container_path(container)?
+        get_container_path(&container)?
     );
 
     info!("cloning process...");

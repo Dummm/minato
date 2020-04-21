@@ -10,7 +10,7 @@ Manager-ul de containere trebuie sa:
 
 - [ ] Creeze container-ul in sine (folosind un id generat si o imagine, poate mai multe pe viitor):
   - [x] Creeze directorul pentru container
-  - [ ] Genereze config.json pentru stocat configurarile (UPDATE: Posibil sa fie un fisier 'hardcodat')
+  - [ ] Genereze config.json pentru stocat configurarile (UPDATE: Posibil sa fie un fisier 'hardcodat'. Si apoi folosita la run)
 - [ ] Ruleze container-ul
   - [x] Sa monteze cu overlay noul filesystem
   - [x] Sa faca root-ul filesistem-ului vechi privat
