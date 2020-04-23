@@ -19,7 +19,7 @@ pub struct Container {
 }
 
 impl Container {
-    pub fn new(image: Option<Image>, container_id: Option<&str>) -> Container {
+    pub fn new(container_id: Option<&str>, image: Option<Image>) -> Container {
         let id: String = match container_id {
             Some(id) => id.to_string(),
             None => {

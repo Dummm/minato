@@ -18,6 +18,8 @@ use clap::ArgMatches;
 use crate::image_manager;
 use crate::container::Container;
 
+
+
 // TODO: Move to utils/helpers
 pub fn get_container_path(container: &Container) -> Result<String, Box<dyn std::error::Error>> {
     let home = match dirs::home_dir() {
@@ -60,20 +62,24 @@ fn generate_config_json() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn create(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: Remove hardcode
-    // let image_name = "library/alpine";
-    let image_name = "library/ubuntu:latest";
+pub fn create_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    let image_name = args.value_of("image_name").unwrap();
+    let container_name = args.value_of("container_name").unwrap();
+    create(image_name, container_name)
+}
+
+pub fn create(container_name: &str, image_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut image = match image_manager::load_image(image_name)? {
         Some(image) => image,
         None        => {
-            // TODO: Add functionality
-            info!("image not found");
+            // TODO: Add verification
+            info!("image not found. trying to pull image...");
+            image_manager::pull(image_name)?;
+            create(container_name, image_name)?;
             return Ok(())
         }
     };
-    let container_name = "cont";
-    let container = Container::new(Some(image), Some(container_name));
+    let container = Container::new(Some(container_name), Some(image));
 
     info!("creating container '{}'...", container.id);
 
@@ -126,21 +132,57 @@ fn mount_container_filesystem(container: &Container)  -> Result<(), Box<dyn std:
     Ok(())
 }
 
-pub fn run(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: Remove hardcode
-    // let image_name = "library/alpine";
-    let image_name = "library/ubuntu:latest";
-    let mut image = match image_manager::load_image(image_name)? {
+pub fn load_container(container_name: &str) -> Result<Option<Container>, Box<dyn std::error::Error>> {
+    let mut container = Container::new(Some(container_name), None);
+    let container_path_str = get_container_path(&container)?;
+    let container_path = Path::new(container_path_str.as_str());
+
+    if !container_path.exists() {
+        return Ok(None)
+    }
+
+    // TODO: Find a better way to find image
+    let container_lower_path = container_path.join("lower");
+    let container_image_path = container_lower_path.read_link().unwrap();
+
+    let home = match dirs::home_dir() {
+        Some(path) => path,
+        None       => return Err("error getting home directory".into())
+    };
+    let images_path = format!(
+        "{}/.minato/images/",
+        home.display()
+    );
+    info!("{}", images_path);
+
+    let image_name = container_image_path
+        .strip_prefix(images_path)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    // info!("image name: {}", image_name);
+    let image = match image_manager::load_image(image_name).unwrap() {
         Some(image) => image,
-        None        => {
-            // TODO: Add functionality
-            info!("image not found");
+        None        => return Ok(None)
+    };
+    container.image = Some(image);
+
+    Ok(Some(container))
+}
+
+pub fn run_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    let container_name = args.value_of("container_name").unwrap();
+    run(container_name)
+}
+
+pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let container = match load_container(container_name).unwrap() {
+        Some(container) => container,
+        None            => {
+            info!("container not found. exiting...");
             return Ok(())
         }
     };
-    let container_name = "cont";
-    let container = Container::new(Some(image), Some(container_name));
-
     info!("running container '{}'...", &container.id);
 
     mount_container_filesystem(&container)?;

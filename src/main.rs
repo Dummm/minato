@@ -14,6 +14,7 @@ use container::Container;
 
 // TODO: Modularize project
 // TODO: Switch overlay mounting method if root is required
+// TODO: Change parameters from args to strings or something
 fn main() {
     env_logger::init();
 
@@ -27,9 +28,9 @@ fn main() {
                 Arg::with_name("image_name")
                     .help("specify image name")
                     .short("n")
-                    .long("name")
+                    .long("image_name")
                     .takes_value(true)
-                    .default_value("library/alpine")
+                    .default_value("library/alpine:latest")
                     .required(true)
                     .multiple(false),
             )
@@ -51,6 +52,7 @@ fn main() {
                     .short("i")
                     .long("image_name")
                     .takes_value(true)
+                    .default_value("library/alpine:latest")
                     .required(true)
                     .multiple(false),
             )
@@ -83,9 +85,9 @@ fn main() {
     // info!("using command: {}", config.command);
 
     let result = match &app.clone().get_matches().subcommand() {
-        ("pull",   Some(subcommand_args)) => image_manager::pull(&subcommand_args),
-        ("create", Some(subcommand_args)) => container_manager::create(&subcommand_args),
-        ("run",    Some(subcommand_args)) => container_manager::run(&subcommand_args),
+        ("pull",   Some(subcommand_args)) => image_manager::pull_with_args(&subcommand_args),
+        ("create", Some(subcommand_args)) => container_manager::create_with_args(&subcommand_args),
+        ("run",    Some(subcommand_args)) => container_manager::run_with_args(&subcommand_args),
         _ => {
             eprintln!("Unexpected arguments");
             app.print_help().unwrap();

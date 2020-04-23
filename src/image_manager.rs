@@ -51,6 +51,7 @@ fn get_filesystem_layers(token: &str, manifests_url: &str) -> Result<Vec<Value>,
 }
 
 // TODO: Move to utils/helpers
+// TODO: Change so it takes a string as parameter
 pub fn get_image_path(image: &Image) -> Result<String, Box<dyn std::error::Error>> {
     let home = match dirs::home_dir() {
         Some(path) => path,
@@ -172,14 +173,20 @@ pub fn load_image(image_name: &str) -> Result<Option<Image>, Box<dyn std::error:
     Ok(Some(image))
 }
 
+pub fn pull_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    let image_name = args.value_of("image_name").unwrap();
+    pull(image_name)
+}
+
 // TODO: Modularize
-pub fn pull(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+pub fn pull(image_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("pulling image...");
 
-    // TODO: Remove hardcode
-    // let image_name = "library/alpine";
-    let image_name = "library/ubuntu:latest";
-    let mut image = load_image(image_name).unwrap().unwrap();
+    info!("image name: {}", image_name);
+    let mut image = match load_image(image_name).unwrap() {
+        Some(image) => image,
+        None => Image::new(image_name)
+    };
 
     let image_path_str = get_image_path(&image)?;
     if Path::new(image_path_str.as_str()).exists() {
