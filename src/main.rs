@@ -1,15 +1,13 @@
-use std::process::{self, exit};
+use std::process::exit;
 
 extern crate clap;
-use clap::{crate_name, crate_version, App, Arg, SubCommand};
+use clap::{App, Arg, SubCommand, crate_name, crate_version};
 use log::*;
 
 mod image;
 mod image_manager;
-use image::Image;
 mod container;
 mod container_manager;
-use container::Container;
 
 
 // TODO: Modularize project
@@ -20,8 +18,7 @@ fn main() {
 
     let mut app = App::new(crate_name!())
         .version(crate_version!())
-        .about("container runtime")//;
-    // let args = &app
+        .about("container runtime")
         .subcommand(SubCommand::with_name("pull")
             .about("pull image from docker repository")
             .arg(
@@ -79,12 +76,11 @@ fn main() {
             )
         );
 
-    // TODO: Parse arguments
-    // let config = Config::new(args).unwrap();
-    // info!("using rootfs: {}", config.root_filesystem);
-    // info!("using command: {}", config.command);
 
-    let result = match &app.clone().get_matches().subcommand() {
+    info!("{} {}", crate_name!(), crate_version!());
+    info!("starting...");
+
+    match &app.clone().get_matches().subcommand() {
         ("pull",   Some(subcommand_args)) => image_manager::pull_with_args(&subcommand_args),
         ("create", Some(subcommand_args)) => container_manager::create_with_args(&subcommand_args),
         ("run",    Some(subcommand_args)) => container_manager::run_with_args(&subcommand_args),
@@ -94,23 +90,5 @@ fn main() {
             println!();
             exit(1);
         }
-    };
-
-    // let mut image = Image::new("library/ubuntu");
-    // if let Err(e) = image_manager::pull(&mut image) {
-    //     error!("image pulling unsuccessful: {}", e);
-    //     process::exit(1);
-    // }
-
-    // let container = Container::new(Some(image), Some("cont"));
-    // if let Err(e) = container_manager::create(&container) {
-    //     error!("container creation unsuccessful: {}", e);
-    //     process::exit(1);
-    // };
-
-    // if let Err(e) = container_manager::run(&container) {
-    //     error!("container run unsuccessful: {}", e);
-    //     process::exit(1);
-    // };
-
+    }.unwrap()
 }

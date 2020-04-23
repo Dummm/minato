@@ -69,7 +69,7 @@ pub fn create_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Err
 }
 
 pub fn create(container_name: &str, image_name: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let mut image = match image_manager::load_image(image_name)? {
+    let image = match image_manager::load_image(image_name)? {
         Some(image) => image,
         None        => {
             // TODO: Add verification
