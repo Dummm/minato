@@ -21,7 +21,7 @@ use crate::container::Container;
 
 
 // TODO: Move to utils/helpers
-pub fn get_container_path(container: &Container) -> Result<String, Box<dyn std::error::Error>> {
+pub fn get_container_path_with_str(container_id: &str) -> Result<String, Box<dyn std::error::Error>> {
     let home = match dirs::home_dir() {
         Some(path) => path,
         None       => return Err("error getting home directory".into())
@@ -29,8 +29,12 @@ pub fn get_container_path(container: &Container) -> Result<String, Box<dyn std::
 
     Ok(format!(
         "{}/.minato/containers/{}",
-        home.display(), container.id
+        home.display(), container_id
     ))
+}
+
+pub fn get_container_path(container: &Container) -> Result<String, Box<dyn std::error::Error>> {
+    get_container_path_with_str(container.id.as_str())
 }
 
 fn create_directory_structure(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
@@ -65,7 +69,7 @@ fn generate_config_json() -> Result<(), Box<dyn std::error::Error>> {
 pub fn create_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let image_name = args.value_of("image_name").unwrap();
     let container_name = args.value_of("container_name").unwrap();
-    create(image_name, container_name)
+    create(container_name, image_name)
 }
 
 pub fn create(container_name: &str, image_name: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -83,7 +87,7 @@ pub fn create(container_name: &str, image_name: &str) -> Result<(), Box<dyn std:
 
     info!("creating container '{}'...", container.id);
 
-    let container_path_str = get_container_path(&container)?;
+    let container_path_str = get_container_path_with_str(container_name)?;
     if Path::new(container_path_str.as_str()).exists() {
         info!("container exists. skipping creation...");
         return Ok(())
@@ -175,18 +179,7 @@ pub fn run_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     run(container_name)
 }
 
-pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let container = match load_container(container_name).unwrap() {
-        Some(container) => container,
-        None            => {
-            info!("container not found. exiting...");
-            return Ok(())
-        }
-    };
-    info!("running container '{}'...", &container.id);
-
-    mount_container_filesystem(&container)?;
-
+fn prepare_parent_filesystems() -> Result<(), Box<dyn std::error::Error>> {
     info!("making host mount namespace private...");
     mount(
         None::<&str>,
@@ -196,14 +189,17 @@ pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         None::<&str>,
     )?;
 
+    Ok(())
+}
 
-    info!("performing bind mount on container filesystem...");
+fn start_container_process(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
+    info!("cloning process...");
+
     let rootfs_path_str = format!(
         "{}/merged",
-        get_container_path(&container)?
+        get_container_path(container)?
     );
 
-    info!("cloning process...");
     let cb = Box::new(|| {
         if let Err(e) = init(rootfs_path_str.as_str()) {
             error!("unable to initialize container: {}", e);
@@ -230,6 +226,33 @@ pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("child pid: {}", childpid);
     thread::sleep(time::Duration::from_millis(300));
     waitpid(childpid, None)?;
+
+    Ok(())
+}
+
+pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let container = match load_container(container_name).unwrap() {
+        Some(container) => container,
+        None            => {
+            info!("container not found. exiting...");
+            return Ok(())
+        }
+    };
+    info!("running container '{}'...", &container.id);
+
+    mount_container_filesystem(&container)?;
+
+    // Unmount mounted filesystem in case of error
+    if let Err(e) = prepare_parent_filesystems() {
+        cleanup(&container)?;
+        return Err(e);
+    };
+    if let Err(e) = start_container_process(&container) {
+        cleanup(&container)?;
+        return Err(e);
+    };
+
+    cleanup(&container)?;
 
     info!("run successfull");
     Ok(())
@@ -290,7 +313,6 @@ fn init(rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-
 fn do_exec(cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("preparing command execution...");
 
@@ -310,6 +332,23 @@ fn do_exec(cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", envs);
     info!("{:?}", p);
     execve(&p, &a, &e)?;
+
+    Ok(())
+}
+
+fn unmount_container_filesystem(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
+    let container_path_str = get_container_path(container)?;
+    let merged = format!("{}/merged", container_path_str);
+    umount2(merged.as_str(), MntFlags::MNT_DETACH)?;
+
+    Ok(())
+}
+
+
+fn cleanup(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
+    info!("cleaning up container...");
+
+    unmount_container_filesystem(container)?;
 
     Ok(())
 }

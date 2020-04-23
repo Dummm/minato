@@ -12,7 +12,8 @@ mod container_manager;
 
 // TODO: Modularize project
 // TODO: Switch overlay mounting method if root is required
-// TODO: Change parameters from args to strings or something
+// TODO: Try archivemount instead of unarchiving layers
+// TODO: Work on the spec files for the config.json
 fn main() {
     env_logger::init();
 

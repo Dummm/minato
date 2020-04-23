@@ -18,6 +18,7 @@ pub struct Container {
     pub state: State,
 }
 
+// TODO: Add methods for container paths
 impl Container {
     pub fn new(container_id: Option<&str>, image: Option<Image>) -> Container {
         let id: String = match container_id {

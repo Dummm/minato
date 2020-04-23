@@ -51,8 +51,7 @@ fn get_filesystem_layers(token: &str, manifests_url: &str) -> Result<Vec<Value>,
 }
 
 // TODO: Move to utils/helpers
-// TODO: Change so it takes a string as parameter
-pub fn get_image_path(image: &Image) -> Result<String, Box<dyn std::error::Error>> {
+pub fn get_image_path_with_str(image_name: &str, image_reference: &str) -> Result<String, Box<dyn std::error::Error>> {
     let home = match dirs::home_dir() {
         Some(path) => path,
         None       => return Err("error getting home directory".into())
@@ -60,8 +59,12 @@ pub fn get_image_path(image: &Image) -> Result<String, Box<dyn std::error::Error
 
     Ok(format!(
         "{}/.minato/images/{}:{}",
-        home.display(), image.name, image.reference
+        home.display(), image_name, image_reference
     ))
+}
+
+pub fn get_image_path(image: &Image) -> Result<String, Box<dyn std::error::Error>> {
+    get_image_path_with_str(image.name.as_str(), image.reference.as_str())
 }
 
 fn download_layer(image: &mut Image, token: &str, fs_layer: &Value) -> Result<(), Box<dyn std::error::Error>> {
@@ -151,8 +154,8 @@ fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> 
 }
 
 // TODO: Move to utils & clean-up mess
-pub fn load_image(image_name: &str) -> Result<Option<Image>, Box<dyn std::error::Error>> {
-    let mut image = Image::new(image_name);
+pub fn load_image(image_id: &str) -> Result<Option<Image>, Box<dyn std::error::Error>> {
+    let mut image = Image::new(image_id);
     let image_path_str = get_image_path(&image)?;
     let image_path = Path::new(image_path_str.as_str());
 
@@ -179,13 +182,13 @@ pub fn pull_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error
 }
 
 // TODO: Modularize
-pub fn pull(image_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn pull(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("pulling image...");
 
-    info!("image name: {}", image_name);
-    let mut image = match load_image(image_name).unwrap() {
+    info!("image name: {}", image_id);
+    let mut image = match load_image(image_id).unwrap() {
         Some(image) => image,
-        None => Image::new(image_name)
+        None => Image::new(image_id)
     };
 
     let image_path_str = get_image_path(&image)?;
