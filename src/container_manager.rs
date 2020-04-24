@@ -17,30 +17,13 @@ use clap::ArgMatches;
 
 use crate::image_manager;
 use crate::container::Container;
+use crate::utils;
 
-
-
-// TODO: Move to utils/helpers
-pub fn get_container_path_with_str(container_id: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let home = match dirs::home_dir() {
-        Some(path) => path,
-        None       => return Err("error getting home directory".into())
-    };
-
-    Ok(format!(
-        "{}/.minato/containers/{}",
-        home.display(), container_id
-    ))
-}
-
-pub fn get_container_path(container: &Container) -> Result<String, Box<dyn std::error::Error>> {
-    get_container_path_with_str(container.id.as_str())
-}
 
 fn create_directory_structure(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
     info!("creating container directory structure...");
 
-    let container_path_str = get_container_path(container)?;
+    let container_path_str = utils::get_container_path(container)?;
     let container_path = Path::new(container_path_str.as_str());
     if !container_path.exists() {
         fs::create_dir_all(container_path.clone())?;
@@ -53,7 +36,7 @@ fn create_directory_structure(container: &Container) -> Result<(), Box<dyn std::
 
         let container_lower_path = container_path.join("lower");
         unix::fs::symlink(
-            image_manager::get_image_path(&container.image.as_ref().unwrap()).unwrap(),
+            utils::get_image_path(&container.image.as_ref().unwrap()).unwrap(),
             container_lower_path
         )?;
     }
@@ -87,7 +70,7 @@ pub fn create(container_name: &str, image_name: &str) -> Result<(), Box<dyn std:
 
     info!("creating container '{}'...", container.id);
 
-    let container_path_str = get_container_path_with_str(container_name)?;
+    let container_path_str = utils::get_container_path_with_str(container_name)?;
     if Path::new(container_path_str.as_str()).exists() {
         info!("container exists. skipping creation...");
         return Ok(())
@@ -102,7 +85,7 @@ pub fn create(container_name: &str, image_name: &str) -> Result<(), Box<dyn std:
 fn mount_container_filesystem(container: &Container)  -> Result<(), Box<dyn std::error::Error>> {
     info!("mounting container filesystem...");
 
-    let container_path_str = get_container_path(container)?;
+    let container_path_str = utils::get_container_path(container)?;
     let container_path = Path::new(container_path_str.as_str());
 
     // TODO: Fix this mess
@@ -138,7 +121,7 @@ fn mount_container_filesystem(container: &Container)  -> Result<(), Box<dyn std:
 
 pub fn load_container(container_name: &str) -> Result<Option<Container>, Box<dyn std::error::Error>> {
     let mut container = Container::new(Some(container_name), None);
-    let container_path_str = get_container_path(&container)?;
+    let container_path_str = utils::get_container_path(&container)?;
     let container_path = Path::new(container_path_str.as_str());
 
     if !container_path.exists() {
@@ -197,7 +180,7 @@ fn start_container_process(container: &Container) -> Result<(), Box<dyn std::err
 
     let rootfs_path_str = format!(
         "{}/merged",
-        get_container_path(container)?
+        utils::get_container_path(container)?
     );
 
     let cb = Box::new(|| {
@@ -337,13 +320,12 @@ fn do_exec(cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn unmount_container_filesystem(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
-    let container_path_str = get_container_path(container)?;
+    let container_path_str = utils::get_container_path(container)?;
     let merged = format!("{}/merged", container_path_str);
     umount2(merged.as_str(), MntFlags::MNT_DETACH)?;
 
     Ok(())
 }
-
 
 fn cleanup(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
     info!("cleaning up container...");

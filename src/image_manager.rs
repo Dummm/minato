@@ -7,12 +7,13 @@ use reqwest;
 use serde_json::{self, Value};
 use tar::Archive;
 use flate2::read::GzDecoder;
-use dirs;
 
 extern crate clap;
 use clap::ArgMatches;
 
 use crate::image::Image;
+use crate::utils;
+
 
 fn get_authentication_token(auth_url: &str) -> Result<String, Box<dyn std::error::Error>> {
     info!("sending authentication token request to: {}...", auth_url);
@@ -50,28 +51,11 @@ fn get_filesystem_layers(token: &str, manifests_url: &str) -> Result<Vec<Value>,
     Ok(fs_layers.clone())
 }
 
-// TODO: Move to utils/helpers
-pub fn get_image_path_with_str(image_name: &str, image_reference: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let home = match dirs::home_dir() {
-        Some(path) => path,
-        None       => return Err("error getting home directory".into())
-    };
-
-    Ok(format!(
-        "{}/.minato/images/{}:{}",
-        home.display(), image_name, image_reference
-    ))
-}
-
-pub fn get_image_path(image: &Image) -> Result<String, Box<dyn std::error::Error>> {
-    get_image_path_with_str(image.name.as_str(), image.reference.as_str())
-}
-
 fn download_layer(image: &mut Image, token: &str, fs_layer: &Value) -> Result<(), Box<dyn std::error::Error>> {
     if let Value::String(blob_sum) = &fs_layer["blobSum"] {
         let digest = blob_sum.replace("sha256:", "");
         // let digest = blob_sum.split_off(blob_sum.find(':')?);
-        let image_path_str = get_image_path(image)?;
+        let image_path_str = utils::get_image_path(image)?;
         let tar_path = format!(
             "{}/{}.tar.gz",
             image_path_str, digest
@@ -103,7 +87,7 @@ fn unpack_image_layers(image: &mut Image) -> Result<(), Box<dyn std::error::Erro
     info!("unpacking image layers...");
 
     for fs_layer in &image.fs_layers {
-        let image_path_str = get_image_path(image)?;
+        let image_path_str = utils::get_image_path(image)?;
         let layer_path = format!(
             "{}/{}",
             image_path_str, fs_layer
@@ -134,7 +118,7 @@ fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> 
     info!("cleaning up image directory...");
 
     for fs_layer in &image.fs_layers {
-        let image_path_str = get_image_path(image)?;
+        let image_path_str = utils::get_image_path(image)?;
         let layer_path = format!(
             "{}/{}",
             image_path_str, fs_layer
@@ -156,7 +140,7 @@ fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> 
 // TODO: Move to utils & clean-up mess
 pub fn load_image(image_id: &str) -> Result<Option<Image>, Box<dyn std::error::Error>> {
     let mut image = Image::new(image_id);
-    let image_path_str = get_image_path(&image)?;
+    let image_path_str = utils::get_image_path(&image)?;
     let image_path = Path::new(image_path_str.as_str());
 
     if !image_path.exists() {
@@ -191,7 +175,7 @@ pub fn pull(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         None => Image::new(image_id)
     };
 
-    let image_path_str = get_image_path(&image)?;
+    let image_path_str = utils::get_image_path(&image)?;
     if Path::new(image_path_str.as_str()).exists() {
         info!("image exists. skipping pull...");
         return Ok(())

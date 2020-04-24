@@ -8,6 +8,7 @@ mod image;
 mod image_manager;
 mod container;
 mod container_manager;
+mod utils;
 
 
 // TODO: Modularize project
