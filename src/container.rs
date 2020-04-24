@@ -4,18 +4,18 @@ use rand::{thread_rng, Rng};
 
 use super::image::Image;
 
-#[derive(Debug, PartialEq)]
-pub enum State {
-    Creating,
-    Created(u32),
-    Running(u32),
-    Stopped,
-}
+// #[derive(Debug, PartialEq)]
+// pub enum State {
+//     Creating,
+//     Created(u32),
+//     Running(u32),
+//     Stopped,
+// }
 
 pub struct Container {
     pub id: String,
     pub image: Option<Image>,
-    pub state: State,
+    // pub state: State,
 }
 
 // TODO: Add methods for container paths
@@ -35,7 +35,7 @@ impl Container {
         Container {
             id,
             image,
-            state: State::Stopped,
+            // state: State::Stopped,
         }
     }
 }
