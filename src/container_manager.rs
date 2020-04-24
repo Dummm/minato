@@ -120,6 +120,7 @@ fn mount_container_filesystem(container: &Container)  -> Result<(), Box<dyn std:
     Ok(())
 }
 
+// TODO: Find a better way to find image
 pub fn load_container(container_name: &str) -> Result<Option<Container>, Box<dyn std::error::Error>> {
     let mut container = Container::new(Some(container_name), None);
     let container_path_str = utils::get_container_path(&container)?;
@@ -129,7 +130,6 @@ pub fn load_container(container_name: &str) -> Result<Option<Container>, Box<dyn
         return Ok(None)
     }
 
-    // TODO: Find a better way to find image
     let container_lower_path = container_path.join("lower");
     let container_image_path = container_lower_path.read_link().unwrap();
 
@@ -176,6 +176,7 @@ fn prepare_parent_filesystems() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// TODO: Check if stack values modifications are required
 fn start_container_process(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
     info!("cloning process...");
 
@@ -192,7 +193,7 @@ fn start_container_process(container: &Container) -> Result<(), Box<dyn std::err
             0
         }
     });
-    // TODO: Check if modifications are required
+
     let stack = &mut [0; 1024 * 1024];
     let clone_flags =
         CloneFlags::CLONE_NEWUTS |
@@ -242,6 +243,7 @@ pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// TODO: Change from hostname and cmd from literals to variables
 fn init(rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("initiating container...");
 
@@ -289,7 +291,6 @@ fn init(rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
         None::<&str>,
     )?;
 
-    // TODO: Change from literals to variables
     sethostname("test")?;
     do_exec("/bin/sh")?;
     // do_exec("/bin/bash")?;

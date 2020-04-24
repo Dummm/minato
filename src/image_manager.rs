@@ -114,6 +114,7 @@ fn unpack_image_layers(image: &mut Image) -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
+// TODO: Check if file exists before removal?
 fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
     info!("cleaning up image directory...");
 
@@ -128,7 +129,6 @@ fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> 
             layer_path
         );
 
-        // TODO: Check if file exists?
         fs::remove_file(tar_path)?;
         info!("removed archive layer {}", fs_layer);
     }
