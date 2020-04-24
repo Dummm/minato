@@ -15,6 +15,7 @@ mod utils;
 // TODO: Switch overlay mounting method if root is required
 // TODO: Try archivemount instead of unarchiving layers
 // TODO: Work on the spec files for the config.json
+// TODO: Use config.json to store container states?
 fn main() {
     env_logger::init();
 
@@ -64,9 +65,20 @@ fn main() {
                     .help("Command executed on container creation"),
             )
         )
-        .subcommand(
-            SubCommand::with_name("run")
+        .subcommand(SubCommand::with_name("run")
             .about("run container")
+            .arg(
+                Arg::with_name("container_name")
+                    .help("specify container name")
+                    .short("n")
+                    .long("name")
+                    .takes_value(true)
+                    .required(true)
+                    .multiple(false),
+            )
+        )
+        .subcommand(SubCommand::with_name("delete")
+            .about("delete container")
             .arg(
                 Arg::with_name("container_name")
                     .help("specify container name")
@@ -86,6 +98,7 @@ fn main() {
         ("pull",   Some(subcommand_args)) => image_manager::pull_with_args(&subcommand_args),
         ("create", Some(subcommand_args)) => container_manager::create_with_args(&subcommand_args),
         ("run",    Some(subcommand_args)) => container_manager::run_with_args(&subcommand_args),
+        ("delete", Some(subcommand_args)) => container_manager::delete_with_args(&subcommand_args),
         _ => {
             eprintln!("Unexpected arguments");
             app.print_help().unwrap();

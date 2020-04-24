@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::utils;
 
 
+// TODO: Save/load container structures in jsons (serde_json)
 pub struct Image {
     pub name: String,
     pub reference: String,

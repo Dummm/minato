@@ -158,11 +158,6 @@ pub fn load_container(container_name: &str) -> Result<Option<Container>, Box<dyn
     Ok(Some(container))
 }
 
-pub fn run_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let container_name = args.value_of("container_name").unwrap();
-    run(container_name)
-}
-
 fn prepare_parent_filesystems() -> Result<(), Box<dyn std::error::Error>> {
     info!("making host mount namespace private...");
     mount(
@@ -213,6 +208,11 @@ fn start_container_process(container: &Container) -> Result<(), Box<dyn std::err
     waitpid(childpid, None)?;
 
     Ok(())
+}
+
+pub fn run_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    let container_name = args.value_of("container_name").unwrap();
+    run(container_name)
 }
 
 pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -334,5 +334,28 @@ fn cleanup(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
 
     unmount_container_filesystem(container)?;
 
+    Ok(())
+}
+
+pub fn delete_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    let container_name = args.value_of("container_name").unwrap();
+    delete(container_name)
+}
+
+// TODO: Add contianer state check
+pub fn delete(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    info!("deleting container '{}'...", container_name);
+
+    let container_path_str = utils::get_container_path_with_str(container_name)?;
+    let container_path = Path::new(container_path_str.as_str());
+
+    if !container_path.exists() {
+        info!("container not found. skipping deletion...");
+        return Ok(())
+    }
+
+    fs::remove_dir_all(container_path)?;
+
+    info!("deletion successfull");
     Ok(())
 }

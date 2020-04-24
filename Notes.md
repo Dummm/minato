@@ -20,5 +20,6 @@ Manager-ul de containere trebuie sa:
   - [x] chdir pe /
   - [x] Sa faca clean-up la final
 
-  ### Bugs
-  - [ ] Iesirea din sh (probabil ca nu mai are output)
+### Bugs
+
+- [ ] Iesirea din sh (probabil ca nu mai are output)

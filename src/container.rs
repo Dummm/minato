@@ -4,6 +4,7 @@ use rand::{thread_rng, Rng};
 
 use super::image::Image;
 
+
 // #[derive(Debug, PartialEq)]
 // pub enum State {
 //     Creating,
@@ -12,6 +13,7 @@ use super::image::Image;
 //     Stopped,
 // }
 
+// TODO: Save/load container structures in jsons (serde_json)
 pub struct Container {
     pub id: String,
     pub image: Option<Image>,
