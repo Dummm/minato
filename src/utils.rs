@@ -44,3 +44,25 @@ pub fn split_image_id(image_id: &str) -> Result<(&str, &str), Box<dyn std::error
 
     Ok((ids[0], ids[1]))
 }
+
+// TODO: Clean-up mess
+pub fn load_image(image_id: &str) -> Result<Option<Image>, Box<dyn std::error::Error>> {
+    let mut image = Image::new(image_id);
+
+    let image_path = match image.get_path().unwrap() {
+        Some(path) => path,
+        None       => return Ok(None)
+    };
+
+    let layers = image_path.read_dir()?;
+    image.fs_layers = layers
+        .map(|dir| format!("{}",
+            dir.unwrap()
+            .path()
+            .file_name().unwrap()
+            .to_str().unwrap()))
+        .collect::<Vec<String>>()
+        .clone();
+
+    Ok(Some(image))
+}

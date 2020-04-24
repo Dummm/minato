@@ -137,29 +137,6 @@ fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
-// TODO: Move to utils & clean-up mess
-pub fn load_image(image_id: &str) -> Result<Option<Image>, Box<dyn std::error::Error>> {
-    let mut image = Image::new(image_id);
-    let image_path_str = utils::get_image_path(&image)?;
-    let image_path = Path::new(image_path_str.as_str());
-
-    if !image_path.exists() {
-        return Ok(None)
-    }
-
-    let layers = image_path.read_dir()?;
-    image.fs_layers = layers
-        .map(|dir| format!("{}",
-            dir.unwrap()
-            .path()
-            .file_name().unwrap()
-            .to_str().unwrap()))
-        .collect::<Vec<String>>()
-        .clone();
-
-    Ok(Some(image))
-}
-
 pub fn pull_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let image_name = args.value_of("image_name").unwrap();
     pull(image_name)
@@ -170,7 +147,7 @@ pub fn pull(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("pulling image...");
 
     info!("image name: {}", image_id);
-    let mut image = match load_image(image_id).unwrap() {
+    let mut image = match utils::load_image(image_id).unwrap() {
         Some(image) => image,
         None => Image::new(image_id)
     };
