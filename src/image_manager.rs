@@ -147,7 +147,7 @@ pub fn pull(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("pulling image...");
 
     info!("image name: {}", image_id);
-    let mut image = match utils::load_image(image_id).unwrap() {
+    let mut image = match Image::load(image_id).unwrap() {
         Some(image) => image,
         None => Image::new(image_id)
     };

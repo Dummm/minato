@@ -15,6 +15,7 @@ use dirs;
 use log::{info, error};
 use clap::ArgMatches;
 
+use crate::image::Image;
 use crate::image_manager;
 use crate::container::Container;
 use crate::utils;
@@ -55,14 +56,14 @@ pub fn create_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Err
     create(container_name, image_name)
 }
 
-pub fn create(container_name: &str, image_name: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let image = match utils::load_image(image_name)? {
+pub fn create(container_name: &str, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let image = match Image::load(image_id)? {
         Some(image) => image,
         None        => {
             // TODO: Add verification
             info!("image not found. trying to pull image...");
-            image_manager::pull(image_name)?;
-            create(container_name, image_name)?;
+            image_manager::pull(image_id)?;
+            create(container_name, image_id)?;
             return Ok(())
         }
     };
@@ -142,13 +143,13 @@ pub fn load_container(container_name: &str) -> Result<Option<Container>, Box<dyn
     );
     info!("{}", images_path);
 
-    let image_name = container_image_path
+    let image_id = container_image_path
         .strip_prefix(images_path)
         .unwrap()
         .to_str()
         .unwrap();
     // info!("image name: {}", image_name);
-    let image = match utils::load_image(image_name).unwrap() {
+    let image = match Image::load(image_id).unwrap() {
         Some(image) => image,
         None        => return Ok(None)
     };
