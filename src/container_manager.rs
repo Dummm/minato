@@ -50,6 +50,7 @@ fn generate_config_json() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+
 pub fn create_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let image_name = args.value_of("image_name").unwrap();
     let container_name = args.value_of("container_name").unwrap();
@@ -82,6 +83,7 @@ pub fn create(container_name: &str, image_id: &str) -> Result<(), Box<dyn std::e
 
     Ok(())
 }
+
 
 fn mount_container_filesystem(container: &Container)  -> Result<(), Box<dyn std::error::Error>> {
     info!("mounting container filesystem...");
@@ -210,39 +212,6 @@ fn start_container_process(container: &Container) -> Result<(), Box<dyn std::err
     Ok(())
 }
 
-pub fn run_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let container_name = args.value_of("container_name").unwrap();
-    run(container_name)
-}
-
-pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let container = match load_container(container_name).unwrap() {
-        Some(container) => container,
-        None            => {
-            info!("container not found. exiting...");
-            return Ok(())
-        }
-    };
-    info!("running container '{}'...", &container.id);
-
-    mount_container_filesystem(&container)?;
-
-    // Unmount mounted filesystem in case of error
-    if let Err(e) = prepare_parent_filesystems() {
-        cleanup(&container)?;
-        return Err(e);
-    };
-    if let Err(e) = start_container_process(&container) {
-        cleanup(&container)?;
-        return Err(e);
-    };
-
-    cleanup(&container)?;
-
-    info!("run successfull");
-    Ok(())
-}
-
 // TODO: Change from hostname and cmd from literals to variables
 fn init(rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("initiating container...");
@@ -336,6 +305,41 @@ fn cleanup(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+
+pub fn run_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    let container_name = args.value_of("container_name").unwrap();
+    run(container_name)
+}
+
+pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let container = match load_container(container_name).unwrap() {
+        Some(container) => container,
+        None            => {
+            info!("container not found. exiting...");
+            return Ok(())
+        }
+    };
+    info!("running container '{}'...", &container.id);
+
+    mount_container_filesystem(&container)?;
+
+    // Unmount mounted filesystem in case of error
+    if let Err(e) = prepare_parent_filesystems() {
+        cleanup(&container)?;
+        return Err(e);
+    };
+    if let Err(e) = start_container_process(&container) {
+        cleanup(&container)?;
+        return Err(e);
+    };
+
+    cleanup(&container)?;
+
+    info!("run successfull");
+    Ok(())
+}
+
 
 pub fn delete_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let container_name = args.value_of("container_name").unwrap();

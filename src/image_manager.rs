@@ -138,8 +138,8 @@ fn remove_archives(image: &mut Image) -> Result<(), Box<dyn std::error::Error>> 
 }
 
 pub fn pull_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let image_name = args.value_of("image_name").unwrap();
-    pull(image_name)
+    let image_id = args.value_of("image-id").unwrap();
+    pull(image_id)
 }
 
 // TODO: Modularize
@@ -183,5 +183,28 @@ pub fn pull(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     remove_archives(&mut image)?;
 
+    Ok(())
+}
+
+
+pub fn delete_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    let image_id = args.value_of("image-id").unwrap();
+    delete(image_id)
+}
+
+pub fn delete(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    info!("deleting image '{}'...", image_id);
+
+    let image_path_str = utils::get_image_path_with_str(image_id)?;
+    let image_path = Path::new(image_path_str.as_str());
+
+    if !image_path.exists() {
+        info!("image not found. skipping deletion...");
+        return Ok(())
+    }
+
+    fs::remove_dir_all(image_path)?;
+
+    info!("deletion successfull");
     Ok(())
 }

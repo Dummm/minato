@@ -5,6 +5,7 @@ use crate::utils;
 
 // TODO: Save/load container structures in jsons (serde_json)
 pub struct Image {
+    pub id: String,
     pub name: String,
     pub reference: String,
     pub fs_layers: Vec<String>,
@@ -17,6 +18,7 @@ impl Image {
         let (image_name, image_reference) = utils::split_image_id(image_id).unwrap();
 
         Image {
+            id: image_id.to_string(),
             name: image_name.to_string(),
             reference: image_reference.to_string(),
             fs_layers: Vec::<String>::new(),
