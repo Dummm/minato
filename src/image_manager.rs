@@ -32,7 +32,7 @@ fn get_authentication_token(auth_url: &str) -> Result<String, Box<dyn std::error
     Ok(token.clone())
 }
 
-fn get_filesystem_layers(token: &str, manifests_url: &str) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
+fn get_image_json(token: &str, manifests_url: &str) -> Result<Value, Box<dyn std::error::Error>> {
     info!("sending manifests request to: {}...", manifests_url);
 
     let response = reqwest::blocking::Client::new()
@@ -42,11 +42,46 @@ fn get_filesystem_layers(token: &str, manifests_url: &str) -> Result<Vec<Value>,
     let response_text = response.text()?;
     let body: Value = serde_json::from_str(response_text.as_str())?;
 
+    Ok(body)
+}
+
+fn write_image_json(image_id: &str, body: Value) -> Result<(), Box<dyn std::error::Error>> {
+    info!("writing image json...");
+
+    let home = match dirs::home_dir() {
+        Some(path) => path,
+        None       => return Err("error getting home directory".into())
+    };
+    let json_directory_path_str = format!(
+        "{}/.minato/images/jsons",
+        home.display()
+    );
+    let json_directory_path = Path::new(json_directory_path_str.as_str());
+
+    if !json_directory_path.exists() {
+        fs::create_dir_all(json_directory_path)?;
+    }
+
+    let json_name = format!(
+        "{}.json",
+        image_id.replace("/", "_")
+    );
+    let json_path = json_directory_path.join(json_name);
+
+    serde_json::to_writer(&File::create(&json_path)?, &body)?;
+    info!("json path: {}", json_path.to_str().unwrap());
+
+    Ok(())
+}
+
+fn extract_layers_from_body(body: Value) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
+    info!("extracting fs_layers...");
+
     let fs_layers = match &body["fsLayers"] {
         Value::Array(fs_layers) => fs_layers,
         _ => return Err("filesystem layers retrieval failed".into()),
     };
-    info!("retrieved fs_layers successfully");
+    info!("extracted fs_layers successfully");
 
     Ok(fs_layers.clone())
 }
@@ -168,7 +203,9 @@ pub fn pull(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         "https://registry.hub.docker.com/v2/{}/manifests/{}",
         image.name, image.reference
     );
-    let fs_layers = get_filesystem_layers(token.as_str(), manifests_url.as_str())?;
+    let json = get_image_json(token.as_str(), manifests_url.as_str())?;
+    write_image_json(image_id, json.clone())?;
+    let fs_layers = extract_layers_from_body(json)?;
 
     info!("creating image directory...");
     fs::create_dir_all(image_path_str)?;
@@ -187,13 +224,38 @@ pub fn pull(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 
-pub fn delete_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let image_id = args.value_of("image-id").unwrap();
-    delete(image_id)
+fn delete_image_json(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    info!("deleting image json...");
+
+    let home = match dirs::home_dir() {
+        Some(path) => path,
+        None       => return Err("error getting home directory".into())
+    };
+    let json_directory_path_str = format!(
+        "{}/.minato/images/jsons",
+        home.display()
+    );
+    let json_directory_path = Path::new(json_directory_path_str.as_str());
+
+    let json_name = format!(
+        "{}.json",
+        image_id.replace("/", "_")
+    );
+    let json_path = json_directory_path.join(json_name);
+
+    if !json_path.exists() {
+        info!("image json not found. skipping...");
+        return Ok(())
+    }
+
+    fs::remove_file(json_path)?;
+    info!("image json deleted succesfully");
+
+    Ok(())
 }
 
-pub fn delete(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    info!("deleting image '{}'...", image_id);
+fn delete_image_directory(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    info!("deleting image directory...");
 
     let image_path_str = utils::get_image_path_with_str(image_id)?;
     let image_path = Path::new(image_path_str.as_str());
@@ -204,6 +266,23 @@ pub fn delete(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     fs::remove_dir_all(image_path)?;
+
+    info!("directory deletion successful");
+
+    Ok(())
+}
+
+pub fn delete_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    let image_id = args.value_of("image-id").unwrap();
+    delete(image_id)
+}
+
+pub fn delete(image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    info!("deleting image '{}'...", image_id);
+
+    delete_image_directory(image_id)?;
+
+    delete_image_json(image_id)?;
 
     info!("deletion successfull");
     Ok(())
