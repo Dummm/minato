@@ -53,7 +53,7 @@ fn generate_config_json() -> Result<(), Box<dyn std::error::Error>> {
 
 pub fn create_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let image_name = args.value_of("image_name").unwrap();
-    let container_name = args.value_of("container_name").unwrap();
+    let container_name = args.value_of("container-name").unwrap();
     create(container_name, image_name)
 }
 
@@ -307,8 +307,9 @@ fn cleanup(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 
+// TODO: Fix unwrap here
 pub fn run_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let container_name = args.value_of("container_name").unwrap();
+    let container_name = args.value_of("container-name").unwrap();
     run(container_name)
 }
 
@@ -342,7 +343,7 @@ pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 
 pub fn delete_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let container_name = args.value_of("container_name").unwrap();
+    let container_name = args.value_of("container-name").unwrap();
     delete(container_name)
 }
 

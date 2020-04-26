@@ -17,6 +17,9 @@ mod utils;
 // TODO: Use config.json to store container states?
 // TODO: Change back names from c's to n's
 // TODO: Add listing subcommands for images and containers
+// TODO: Fix unwraps so it doesn't panic
+// TODO: Cgroups
+// TODO: Networking
 fn main() {
     env_logger::init();
 

@@ -53,7 +53,7 @@ fn write_image_json(image_id: &str, body: Value) -> Result<(), Box<dyn std::erro
         None       => return Err("error getting home directory".into())
     };
     let json_directory_path_str = format!(
-        "{}/.minato/images/jsons",
+        "{}/.minato/images/json",
         home.display()
     );
     let json_directory_path = Path::new(json_directory_path_str.as_str());
