@@ -19,6 +19,7 @@ use crate::image::Image;
 use crate::image_manager;
 use crate::container::Container;
 use crate::utils;
+use crate::networking;
 
 
 fn create_directory_structure(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
@@ -52,7 +53,7 @@ fn generate_config_json() -> Result<(), Box<dyn std::error::Error>> {
 
 
 pub fn create_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let image_name = args.value_of("image_name").unwrap();
+    let image_name = args.value_of("image-id").unwrap();
     let container_name = args.value_of("container-name").unwrap();
     create(container_name, image_name)
 }
@@ -115,7 +116,7 @@ fn mount_container_filesystem(container: &Container)  -> Result<(), Box<dyn std:
         .output()
         .unwrap();
 
-    info!("mount output {}", output.status);
+    info!("mount output: {}", output.status);
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
@@ -183,21 +184,21 @@ fn start_container_process(container: &Container) -> Result<(), Box<dyn std::err
     );
 
     let cb = Box::new(|| {
-        if let Err(e) = init(rootfs_path_str.as_str()) {
+        if let Err(e) = init(rootfs_path_str.as_str(), &container.id) {
             error!("unable to initialize container: {}", e);
             -1
         } else {
             0
         }
     });
-
     let stack = &mut [0; 1024 * 1024];
     let clone_flags =
         CloneFlags::CLONE_NEWUTS |
         CloneFlags::CLONE_NEWPID |
         CloneFlags::CLONE_NEWNS |
-        CloneFlags::CLONE_NEWIPC |
-        CloneFlags::CLONE_NEWNET;
+        CloneFlags::CLONE_NEWIPC;// |
+        // CloneFlags::CLONE_NEWNET;
+
     let childpid = clone(
         cb,
         stack,
@@ -207,13 +208,15 @@ fn start_container_process(container: &Container) -> Result<(), Box<dyn std::err
 
     info!("child pid: {}", childpid);
     thread::sleep(time::Duration::from_millis(300));
+
+    // TODO: Remove at some point
     waitpid(childpid, None)?;
 
     Ok(())
 }
 
 // TODO: Change from hostname and cmd from literals to variables
-fn init(rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn init(rootfs: &str, container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("initiating container...");
 
     info!("making root private...");
@@ -261,8 +264,14 @@ fn init(rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     sethostname("test")?;
-    do_exec("/bin/sh")?;
+
+    // BUG: ip not installed
+    if false {
+        networking::add_container_to_network(container_id)?;
+    }
+
     // do_exec("/bin/bash")?;
+    do_exec("/bin/sh")?;
 
     Ok(())
 }
@@ -271,7 +280,11 @@ fn do_exec(cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("preparing command execution...");
 
     let args = &[Path::new(cmd).file_stem().unwrap().to_str().unwrap()];
-    let envs = &["PATH=/bin:/sbin:/usr/bin:/usr/sbin"];
+    let envs = &[
+        "PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin",
+        "TERM=xterm-256color",
+        "LC_ALL=C"
+    ];
     let p = CString::new(cmd).unwrap();
 
     let a: Vec<CString> = args.iter()
@@ -313,6 +326,7 @@ pub fn run_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     run(container_name)
 }
 
+// TODO: Compile functions
 pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let container = match load_container(container_name).unwrap() {
         Some(container) => container,
@@ -325,6 +339,13 @@ pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     mount_container_filesystem(&container)?;
 
+    if false {
+        networking::create_network_namespace(&container.id)?;
+        networking::create_bridge(&container.id)?;
+        networking::create_veth(&container.id)?;
+        networking::add_veth_to_bridge(&container.id)?;
+    }
+
     // Unmount mounted filesystem in case of error
     if let Err(e) = prepare_parent_filesystems() {
         cleanup(&container)?;
@@ -334,6 +355,14 @@ pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         cleanup(&container)?;
         return Err(e);
     };
+
+    if false {
+        networking::delete_container_from_network(&container.id)?;
+        networking::remove_veth_from_bridge(&container.id)?;
+        networking::delete_veth(&container.id)?;
+        networking::delete_bridge(&container.id)?;
+        networking::delete_network_namespace(&container.id)?;
+    }
 
     cleanup(&container)?;
 

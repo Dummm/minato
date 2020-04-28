@@ -8,6 +8,7 @@ mod image_manager;
 mod container;
 mod container_manager;
 mod utils;
+mod networking;
 
 
 // TODO: Modularize project
@@ -19,7 +20,7 @@ mod utils;
 // TODO: Add listing subcommands for images and containers
 // TODO: Fix unwraps so it doesn't panic
 // TODO: Cgroups
-// TODO: Networking
+// TODO: Fix networking
 fn main() {
     env_logger::init();
 
@@ -119,4 +120,5 @@ fn main() {
             exit(1);
         }
     }.unwrap()
+
 }
