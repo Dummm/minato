@@ -51,7 +51,6 @@ fn generate_config_json() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-
 pub fn create_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let image_name = args.value_of("image-id").unwrap();
     let container_name = args.value_of("container-name").unwrap();
@@ -196,8 +195,8 @@ fn start_container_process(container: &Container) -> Result<(), Box<dyn std::err
         CloneFlags::CLONE_NEWUTS |
         CloneFlags::CLONE_NEWPID |
         CloneFlags::CLONE_NEWNS |
-        CloneFlags::CLONE_NEWIPC;// |
-        // CloneFlags::CLONE_NEWNET;
+        CloneFlags::CLONE_NEWIPC |
+        CloneFlags::CLONE_NEWNET;
 
     let childpid = clone(
         cb,
@@ -208,6 +207,11 @@ fn start_container_process(container: &Container) -> Result<(), Box<dyn std::err
 
     info!("child pid: {}", childpid);
     thread::sleep(time::Duration::from_millis(300));
+
+    // if false {
+    if true {
+        networking::add_container_to_network(&container.id, childpid)?;
+    }
 
     // TODO: Remove at some point
     waitpid(childpid, None)?;
@@ -266,9 +270,10 @@ fn init(rootfs: &str, container_id: &str) -> Result<(), Box<dyn std::error::Erro
     sethostname("test")?;
 
     // BUG: ip not installed
-    if false {
-        networking::add_container_to_network(container_id)?;
-    }
+    // if true {
+    // if false {
+    //     networking::add_container_to_network(container_id)?;
+    // }
 
     // do_exec("/bin/bash")?;
     do_exec("/bin/sh")?;
@@ -319,7 +324,6 @@ fn cleanup(container: &Container) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-
 // TODO: Fix unwrap here
 pub fn run_with_args(args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let container_name = args.value_of("container-name").unwrap();
@@ -339,8 +343,22 @@ pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     mount_container_filesystem(&container)?;
 
-    if false {
-        networking::create_network_namespace(&container.id)?;
+    let container_path_str = format!(
+        "{}/merged",
+        utils::get_container_path_with_str(container_name).unwrap()
+    );
+    let hosts = format!("{}/etc/hosts", container_path_str);
+    let resolv = format!("{}/etc/resolv.conf", container_path_str);
+
+    fs::copy("/etc/hosts", &hosts)?;
+    fs::copy("/etc/resolv.conf", &resolv)?;
+    info!("copied /etc/hosts and /etc/resolv.conf");
+
+    // TODO: Add iproute2 check
+
+    if true {
+    // if false {
+        // networking::create_network_namespace(&container.id)?;
         networking::create_bridge(&container.id)?;
         networking::create_veth(&container.id)?;
         networking::add_veth_to_bridge(&container.id)?;
@@ -356,7 +374,8 @@ pub fn run(container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         return Err(e);
     };
 
-    if false {
+    if true {
+    // if false {
         networking::delete_container_from_network(&container.id)?;
         networking::remove_veth_from_bridge(&container.id)?;
         networking::delete_veth(&container.id)?;
