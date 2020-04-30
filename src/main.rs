@@ -4,9 +4,7 @@ extern crate clap;
 use clap::{App, Arg, SubCommand, crate_name, crate_version};
 
 mod image;
-mod image_manager;
 mod container;
-mod container_manager;
 mod utils;
 mod networking;
 
@@ -21,6 +19,7 @@ mod networking;
 // TODO: Fix unwraps so it doesn't panic
 // TODO: Cgroups
 // TODO: Fix networking
+// TODO: Daemon
 fn main() {
     env_logger::init();
 
@@ -107,12 +106,15 @@ fn main() {
             )
         );
 
+    let image_manager = image::ImageManager::new();
+    let container_manager = container::ContainerManager::new();
+
     match &app.clone().get_matches().subcommand() {
-        ("pull-image",       Some(subcommand_args)) => image_manager::pull_with_args(&subcommand_args),
-        ("delete-image",     Some(subcommand_args)) => image_manager::delete_with_args(&subcommand_args),
-        ("create-container", Some(subcommand_args)) => container_manager::create_with_args(&subcommand_args),
-        ("run-container",    Some(subcommand_args)) => container_manager::run_with_args(&subcommand_args),
-        ("delete-container", Some(subcommand_args)) => container_manager::delete_with_args(&subcommand_args),
+        ("pull-image",       Some(subcommand_args)) => image_manager.pull_with_args(&subcommand_args),
+        ("delete-image",     Some(subcommand_args)) => image_manager.delete_with_args(&subcommand_args),
+        ("create-container", Some(subcommand_args)) => container_manager.create_with_args(&subcommand_args),
+        ("run-container",    Some(subcommand_args)) => container_manager.run_with_args(&subcommand_args),
+        ("delete-container", Some(subcommand_args)) => container_manager.delete_with_args(&subcommand_args),
         _ => {
             eprintln!("Unexpected arguments");
             app.print_help().unwrap();
