@@ -384,6 +384,9 @@ impl<'a> ContainerManager<'a> {
 
     // TODO: Compile functions
     pub fn run(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+        info!("running container '{}'...", container_name);
+
+        info!("loading container...");
         let container = match self.load_container(container_name).unwrap() {
             Some(container) => container,
             None            => {
@@ -391,7 +394,6 @@ impl<'a> ContainerManager<'a> {
                 return Ok(())
             }
         };
-        info!("running container '{}'...", &container.id);
 
         self.mount_container_filesystem(&container)?;
 

@@ -1,13 +1,18 @@
 use std::process::exit;
+use std::str::FromStr;
+use regex::Regex;
 
 extern crate structopt;
 use structopt::{StructOpt, clap::crate_name};
+use log::info;
 
-mod cli;
 mod image;
 mod container;
 mod utils;
 mod networking;
+mod daemon;
+mod client;
+
 
 #[derive(Debug, StructOpt)]
 #[structopt(global_setting = structopt::clap::AppSettings::ColoredHelp)]
@@ -24,7 +29,27 @@ pub struct Opt {
     log_level: String,
 
     #[structopt(subcommand)]
-    subcommand: Subcommand
+    subcommand: Option<Subcommand>
+}
+impl FromStr for Opt {
+    type Err = std::string::ParseError;
+
+    fn from_str(opt_str: &str) ->  Result<Self, Self::Err> {
+        let regex_str = r####"(?:Opt \{ daemon: )(true|false)(?:, debug: )(true|false)(?:, log_level: ")([A-Za-z]+\w)(?:", subcommand: )(None|.+)(?: \})"####;
+        let regex = Regex::new(regex_str).unwrap();
+        let matches = regex.captures(opt_str).unwrap();
+        let daemon = matches.get(1).map_or("", |m| m.as_str());
+        let debug = matches.get(2).map_or("", |m| m.as_str());
+        let log_level = matches.get(3).map_or("", |m| m.as_str());
+        let subcommand = matches.get(4).map_or("", |m| m.as_str());
+
+        Ok(Opt {
+            daemon:     bool::from_str(daemon).unwrap(),
+            debug:      bool::from_str(debug).unwrap(),
+            log_level:  String::from(log_level),
+            subcommand: Some(Subcommand::from_str(subcommand).unwrap())
+        })
+    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -39,6 +64,32 @@ enum Subcommand {
     Container {
         #[structopt(subcommand, about = "create|run|delete")]
         action: ContainerAction
+    }
+}
+impl FromStr for Subcommand {
+    type Err = std::io::Error;
+
+    fn from_str(opt_str: &str) ->  Result<Self, Self::Err> {
+        let regex_str = r####"(?:Some\()(.+)(?:\))"####;
+        let regex = Regex::new(regex_str).unwrap();
+        let matches = regex.captures(opt_str).unwrap();
+        let subcommand = matches.get(1).map_or("", |m| m.as_str());
+
+        match subcommand.chars().next() {
+            Some('I') => Ok(
+                Subcommand::Image{
+                    action: ImageAction::from_str(subcommand).unwrap()
+                }
+            ),
+            Some('C') => Ok(
+                Subcommand::Container{
+                    action: ContainerAction::from_str(subcommand).unwrap()
+                }
+            ),
+            _ => Err(
+                std::io::Error::new(std::io::ErrorKind::Other, "invalid subcommand")
+            )
+        }
     }
 }
 
@@ -59,6 +110,33 @@ enum ImageAction {
             about = "Image ID in Docker repository",
             short = "i", long = "image-id")]
         image_id: String,
+    }
+}
+impl FromStr for ImageAction {
+    type Err = std::io::Error;
+
+    fn from_str(opt_str: &str) ->  Result<Self, Self::Err> {
+        let regex_str = r####"(?:Image \{ action: )(Pull|Delete)(?: \{ image_id: ")(.+)(?:" \} \})"####;
+        let regex = Regex::new(regex_str).unwrap();
+        let matches = regex.captures(opt_str).unwrap();
+        let action = matches.get(1).map_or("", |m| m.as_str());
+        let subcommand = matches.get(2).map_or("", |m| m.as_str());
+
+        match action.chars().next() {
+            Some('P') => Ok(
+                ImageAction::Pull{
+                    image_id: String::from(subcommand)
+                }
+            ),
+            Some('D') => Ok(
+                ImageAction::Delete{
+                    image_id: String::from(subcommand)
+                }
+            ),
+            _ => Err(
+                std::io::Error::new(std::io::ErrorKind::Other, "invalid action")
+            )
+        }
     }
 }
 
@@ -94,12 +172,39 @@ enum ContainerAction {
         container_name: String,
     }
 }
+impl FromStr for ContainerAction {
+    type Err = std::io::Error;
 
-fn unexpected_arguments(app: clap::App) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    eprintln!("Unexpected arguments");
-    app.clone().print_help().unwrap();
-    println!();
-    exit(1);
+    fn from_str(opt_str: &str) ->  Result<Self, Self::Err> {
+        let regex_str = r####"(?:Container \{ action: )(Create|Run|Delete)(?: \{ container_name: ")(.+)(?:", image_id: ")*(.*)(?:" \} \})"####;
+        let regex = Regex::new(regex_str).unwrap();
+        let matches = regex.captures(opt_str).unwrap();
+        let action         = matches.get(1).map_or("", |m| m.as_str());
+        let container_name = matches.get(2).map_or("", |m| m.as_str());
+        let image_id       = matches.get(3).map_or("", |m| m.as_str());
+
+        match action.chars().next() {
+            Some('C') => Ok(
+                ContainerAction::Create {
+                    container_name: String::from(container_name),
+                    image_id: String::from(image_id)
+                }
+            ),
+            Some('R') => Ok(
+                ContainerAction::Run {
+                    container_name: String::from(container_name)
+                }
+            ),
+            Some('D') => Ok(
+                ContainerAction::Delete {
+                    container_name: String::from(container_name)
+                }
+            ),
+            _ => Err(
+                std::io::Error::new(std::io::ErrorKind::Other, "invalid action")
+            )
+        }
+    }
 }
 
 
@@ -110,41 +215,70 @@ fn unexpected_arguments(app: clap::App) -> std::result::Result<(), Box<dyn std::
 // TODO: Try archivemount instead of unarchiving layers
 // TODO: Work on the spec files for the config.json
 // TODO: Use config.json to store container run info
-// TODO: Change back names from c's to n's
-// TODO: Add listing subcommands for images and containers
+// TODO: Change back names from c's to n'suse std::nix::net::UnixStream;
 // TODO: Fix unwraps so it doesn't panic
 // TODO: Cgroups
 // TODO: Fix networking
 // TODO: User namespace (uid, gid, subuid, subgid)
-// TODO: Daemon
+// TODO: Safe daemon closing
+// TODO: Manage input and output from daemon
+// TODO: Add function end comment
 
-fn main() {
+fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    let app = Opt::clap();
+    // let app = Opt::clap();
+
     let opt = Opt::from_args();
-    println!("{:?}", opt);
+    // let opt_str = format!("{:?}", opt);
+    // println!("{:?}", opt);
+    // println!("{:?}", opt_str);
+    // println!("{:?}", Opt::from_str(opt_str.as_str()).unwrap());
 
-    let image_manager = image::ImageManager::new();
-    let container_manager = container::ContainerManager::new();
 
-    match &app.clone().get_matches().subcommand() {
-        ("image", Some(subcommand)) => {
-            match subcommand.subcommand() {
-                ("pull", Some(subcommand_args))   => image_manager.pull_with_args(&subcommand_args),
-                ("delete", Some(subcommand_args)) => image_manager.delete_with_args(&subcommand_args),
-                _ => unexpected_arguments(app)
+    if opt.daemon {
+        info!("running in daemon mode");
+
+        match opt.subcommand {
+            None => {
+                info!("running as daemon");
+
+                match daemon::Daemon::new() {
+                    Ok(daemon) => {
+                        daemon.start();
+                        Ok(())
+                    },
+                    Err(e) => {
+                        info!("daemon creation failed");
+                        info!("error: {}", e);
+                        exit(1);
+                    }
+                }
             }
-        },
-        ("container", Some(subcommand)) => {
-            match subcommand.subcommand() {
-                ("create", Some(subcommand_args)) => container_manager.create_with_args(&subcommand_args),
-                ("run",    Some(subcommand_args)) => container_manager.run_with_args(&subcommand_args),
-                ("delete", Some(subcommand_args)) => container_manager.delete_with_args(&subcommand_args),
-                _ => unexpected_arguments(app)
+            Some(_) => {
+                info!("running as client");
+
+                match client::Client::new() {
+                    Ok(client) => {
+                        let message = format!("{:?}", opt);
+                        client.send(message.as_bytes())?;
+                        Ok(())
+                    },
+                    Err(e) => {
+                        info!("client creation failed");
+                        info!("error: {}", e);
+                        exit(1);
+                    }
+                }
             }
-        },
-        _ => unexpected_arguments(app)
-    }.unwrap()
+        }
+    } else {
+        info!("running in daemonless mode");
+
+        let image_manager = image::ImageManager::new();
+        let container_manager = container::ContainerManager::new();
+
+        utils::run_command(opt, &image_manager, &container_manager)
+    }
 
 }

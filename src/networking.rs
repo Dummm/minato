@@ -3,6 +3,8 @@ use std::process::Command;
 use std::io::{self, prelude::*};
 use nix::unistd;
 use std::os::unix;
+use std::fs;
+use std::path::Path;
 
 // pub fn create_network_namespace(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
 //     info!("creating network namespace...");
@@ -181,7 +183,13 @@ pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Resul
     // let veth_host = format!("{}-veth0", container_id);
     let veth_guest = format!("{}-veth1", container_id);
 
+
+
     info!("ln /proc/{}/ns/net /var/run/netns/{}", child, namespace);
+    let netns_path_str = "/var/run/netns/";
+    if !Path::new(netns_path_str).exists() {
+        fs::create_dir_all(netns_path_str)?;
+    }
     unix::fs::symlink(
         format!("/proc/{}/ns/net", child),
         format!("/var/run/netns/{}", namespace)
