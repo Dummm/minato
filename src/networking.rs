@@ -6,27 +6,28 @@ use std::os::unix;
 use std::fs;
 use std::path::Path;
 
-// pub fn create_network_namespace(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-//     info!("creating network namespace...");
-//     let namespace = format!("{}-ns", container_id);
+#[allow(dead_code)]
+pub fn create_network_namespace(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    info!("creating network namespace...");
+    let namespace = format!("{}-ns", container_id);
 
-//     // ip netns add {ns}
-//     let output = Command::new("ip").arg("netns").arg("add").arg(namespace)
-//         .output()
-//         .unwrap();
+    // ip netns add {ns}
+    let output = Command::new("ip").arg("netns").arg("add").arg(namespace)
+        .output()
+        .unwrap();
 
-//     info!("output: {}", output.status);
-//     io::stdout().write_all(&output.stdout).unwrap();
-//     io::stderr().write_all(&output.stderr).unwrap();
+    info!("output: {}", output.status);
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stderr().write_all(&output.stderr).unwrap();
 
-//     Ok(())
-// }
+    Ok(())
+}
 
 pub fn delete_network_namespace(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("deleting network namespace...");
     let namespace = format!("{}-ns", container_id);
 
-    // ip netns del {ns}
+    info!("ip netns del {}", namespace);
     let output = Command::new("ip").arg("netns").arg("del").arg(namespace)
         .output()
         .unwrap();
@@ -43,12 +44,8 @@ pub fn delete_network_namespace(container_id: &str) -> Result<(), Box<dyn std::e
 pub fn create_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("creating bridge...");
 
-    // let namespace = format!("{}-ns", container_id);
-    // let bridge_ip = "172.0.0.1/16"; // {ip}/16
     let host_ip = "10.1.1.1/24";
-    // let container_ip = "10.1.1.2/24";
     let bridge_name = format!("{}-br0", container_id);
-
 
     info!("ip link add {} type bridge", bridge_name);
     let output = Command::new("ip").arg("link").arg("add").arg(bridge_name.clone()).arg("type").arg("bridge")
@@ -174,16 +171,8 @@ pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Resul
     info!("adding container to network...");
 
     let namespace = format!("{}-ns", container_id);
-    // let container_ip = "172.0.0.0/16"; // {ip}/16
-    // let host_ip = "10.1.1.1/24";
-    // let container_ip = "10.1.1.2/24";
     let container_ip = "10.1.1.2";
-    // let bridge_ip = "172.0.0.1/16"; // {ip}/16
-    // let bridge_name = format!("{}-br0", container_id);
-    // let veth_host = format!("{}-veth0", container_id);
     let veth_guest = format!("{}-veth1", container_id);
-
-
 
     info!("ln /proc/{}/ns/net /var/run/netns/{}", child, namespace);
     let netns_path_str = "/var/run/netns/";
@@ -196,10 +185,7 @@ pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Resul
     )?;
 
     info!("ip link set {} netns", namespace);
-    // let output = Command::new("ip").arg("netns").arg("exec").arg(namespace.clone())
-    //     .arg("ip").arg("link").arg("set").arg(veth_guest.clone()).arg("netns").arg(namespace.clone())
     let output = Command::new("ip").arg("link").arg("set").arg(veth_guest.clone()).arg("netns").arg(namespace.clone())
-    // let output = Command::new("ip").arg("link").arg("set").arg(veth_guest.clone()).arg("netns").arg(format!("{}", child))
         .output()
         .unwrap();
     info!("output: {}", output.status);

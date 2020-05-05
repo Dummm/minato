@@ -230,15 +230,8 @@ impl FromStr for ContainerAction {
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    // let app = Opt::clap();
-
     let opt = Opt::from_args();
-    // let opt_str = format!("{:?}", opt);
     // println!("{:?}", opt);
-    // println!("{:?}", opt_str);
-    // println!("{:?}", Opt::from_str(opt_str.as_str()).unwrap());
-
-
     if opt.daemon {
         info!("running in daemon mode");
 
@@ -248,7 +241,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
                 match daemon::Daemon::new() {
                     Ok(daemon) => {
-                        daemon.start();
+                        if let Err(e) = daemon.start() {
+                            info!("error while starting daemon: {}", e);
+                        };
                         Ok(())
                     },
                     Err(e) => {

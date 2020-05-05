@@ -254,9 +254,9 @@ impl<'a>  ImageManager<'a> {
         info!("pulling image...");
 
         // let mut image = match Image::load(image_id).unwrap() {
-            //     Some(image) => image,
-            //     None => Image::new(image_id)
-            // };
+        //         Some(image) => image,
+        //         None => Image::new(image_id)
+        //     };
         let mut image = Image::new(image_id);
         info!("image: {} {} {}", image.id, image.name, image.reference);
 

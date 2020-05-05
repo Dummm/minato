@@ -16,8 +16,6 @@ use crate::Opt;
 
 
 pub struct Daemon<'a> {
-    // socket_name: String,
-    // socket_path: String,
     listener: UnixListener,
     image_manager: image::ImageManager<'a>,
     container_manager: container::ContainerManager<'a>
@@ -46,8 +44,6 @@ impl<'a> Daemon<'a> {
         let socket = Daemon::create_socket(s_path_str.clone())?;
 
         Ok(Daemon {
-            // socket_name: s_name,
-            // socket_path: s_path_str,
             listener: socket,
             image_manager: image::ImageManager::new(),
             container_manager: container::ContainerManager::new()

@@ -1,22 +1,18 @@
 use std::iter;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use std::fs;
 use std::io::{self, prelude::*};
 use std::path::Path;
 use std::os::unix;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time;
 use std::thread;
 use std::ffi::CString;
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use nix::mount::*;
 use nix::sched::*;
 use nix::unistd::{chdir, execve, mkdir, pivot_root, sethostname};
-use nix::sys::{stat, wait::waitpid};
-use std::env;
-use std::collections::HashMap;
-use nix::libc;
-use nix::sys::stat::{Mode, SFlag};
+use nix::sys::stat::{self, Mode, SFlag};
 use nix::unistd;
 
 use dirs;
@@ -24,7 +20,6 @@ use log::{info, error};
 use clap::ArgMatches;
 
 use crate::image::Image;
-// use crate::image_manager;
 use crate::utils;
 use crate::networking;
 
@@ -207,7 +202,6 @@ impl<'a> ContainerManager<'a> {
             .unwrap()
             .to_str()
             .unwrap();
-        // info!("image name: {}", image_name);
         let image = match Image::load(image_id).unwrap() {
             Some(image) => image,
             None        => return Ok(None)
@@ -242,10 +236,14 @@ impl<'a> ContainerManager<'a> {
         let cb = Box::new(|| {
             if let Err(e) = self.init(rootfs_path_str.as_str()) {
                 error!("unable to initialize container: {}", e);
-                self.cleanup(&container);
+                if let Err(e) = self.cleanup(&container) {
+                    info!("error while cleaning up: {}", e);
+                };
                 -1
             } else {
-                self.cleanup(&container);
+                if let Err(e) = self.cleanup(&container) {
+                    info!("error while cleaning up: {}", e);
+                };
                 0
             }
         });
@@ -270,17 +268,19 @@ impl<'a> ContainerManager<'a> {
         info!("child pid: {}", childpid);
         thread::sleep(time::Duration::from_millis(300));
 
+        // BUG: ip not installed
         if false {
         // if true {
             networking::add_container_to_network(&container.id, childpid)?;
         }
 
-        // TODO: Remove at some point
+        // TODO: Control through arguments
         // waitpid(childpid, None)?;
 
         Ok(())
     }
 
+    // TODO: Modularize
     // TODO: Change from hostname and cmd from literals to variables
     fn init(&self, rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("initiating container...");
@@ -331,18 +331,8 @@ impl<'a> ContainerManager<'a> {
 
         sethostname("test")?;
 
-        // BUG: ip not installed
-        // if true {
-        // if false {
-        //     networking::add_container_to_network(container_id)?;
-        // }
-
-        // do_exec("/bin/bash")?;
-        // self.do_exec("/bin/sh")?;
-
         info!("uid: {} - euid: {}", unistd::Uid::current(), unistd::Uid::effective());
         info!("gid: {} - egid: {}", unistd::Gid::current(), unistd::Gid::effective());
-
 
         info!("creating devices...");
         if !Path::new("dev").exists() {
@@ -378,6 +368,7 @@ impl<'a> ContainerManager<'a> {
         self.do_exec("/sbin/init")?;
         // self.do_exec("/bin/sh")?;
 
+        // TODO: Pipe stdin/stdout
         // let filtered_env : HashMap<String, String> =
         //     env::vars().filter(|&(ref k, _)|
         //         k == "TERM" || k == "TZ" || k == "LANG" || k == "PATH"

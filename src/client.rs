@@ -17,8 +17,6 @@ impl Client {
         let socket = Client::connect_to_socket(s_path_str.clone())?;
 
         Ok(Client {
-            // socket_name: s_name,
-            // socket_path: s_path_str,
             stream: socket
         })
     }
