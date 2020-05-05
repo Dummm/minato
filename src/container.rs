@@ -5,7 +5,7 @@ use std::fs;
 use std::io::{self, prelude::*};
 use std::path::Path;
 use std::os::unix;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time;
 use std::thread;
 use std::ffi::CString;
@@ -13,7 +13,11 @@ use nix::mount::*;
 use nix::sched::*;
 use nix::unistd::{chdir, execve, mkdir, pivot_root, sethostname};
 use nix::sys::{stat, wait::waitpid};
-
+use std::env;
+use std::collections::HashMap;
+use nix::libc;
+use nix::sys::stat::{Mode, SFlag};
+use nix::unistd;
 
 use dirs;
 use log::{info, error};
@@ -102,6 +106,7 @@ impl<'a> ContainerManager<'a> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn create_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         let image_name = args.value_of("image-id").unwrap();
         let container_name = args.value_of("container-name").unwrap();
@@ -237,18 +242,23 @@ impl<'a> ContainerManager<'a> {
         let cb = Box::new(|| {
             if let Err(e) = self.init(rootfs_path_str.as_str()) {
                 error!("unable to initialize container: {}", e);
+                self.cleanup(&container);
                 -1
             } else {
+                self.cleanup(&container);
                 0
             }
         });
         let stack = &mut [0; 1024 * 1024];
-        let clone_flags =
+        let mut clone_flags =
             CloneFlags::CLONE_NEWUTS |
             CloneFlags::CLONE_NEWPID |
             CloneFlags::CLONE_NEWNS |
-            CloneFlags::CLONE_NEWIPC |
-            CloneFlags::CLONE_NEWNET;
+            CloneFlags::CLONE_NEWIPC;
+        // if true {
+        if false {
+            clone_flags |= CloneFlags::CLONE_NEWNET;
+        }
 
         let childpid = clone(
             cb,
@@ -260,13 +270,13 @@ impl<'a> ContainerManager<'a> {
         info!("child pid: {}", childpid);
         thread::sleep(time::Duration::from_millis(300));
 
-        // if false {
-        if true {
+        if false {
+        // if true {
             networking::add_container_to_network(&container.id, childpid)?;
         }
 
         // TODO: Remove at some point
-        waitpid(childpid, None)?;
+        // waitpid(childpid, None)?;
 
         Ok(())
     }
@@ -328,7 +338,61 @@ impl<'a> ContainerManager<'a> {
         // }
 
         // do_exec("/bin/bash")?;
-        self.do_exec("/bin/sh")?;
+        // self.do_exec("/bin/sh")?;
+
+        info!("uid: {} - euid: {}", unistd::Uid::current(), unistd::Uid::effective());
+        info!("gid: {} - egid: {}", unistd::Gid::current(), unistd::Gid::effective());
+
+
+        info!("creating devices...");
+        if !Path::new("dev").exists() {
+            fs::create_dir("dev")?;
+        }
+        info!("creating ttys");
+        for i in 0..7 {
+            info!("creating tty{}...", i);
+
+            let tty_path_str = format!("/dev/tty{}", i);
+            let perms =
+                Mode::S_IRUSR | Mode::S_IWUSR |
+                Mode::S_IRGRP | Mode::S_IWGRP |
+                Mode::S_IROTH | Mode::S_IWOTH;
+            if Path::new(tty_path_str.clone().as_str()).exists() {
+                info!("removing /dev/tty1...");
+                fs::remove_file(tty_path_str.clone())?;
+            }
+            stat::mknod(
+                tty_path_str.clone().as_str(),
+                SFlag::S_IFCHR,
+                perms,
+                stat::makedev(4, i)
+            )?;
+            unistd::chown(
+                tty_path_str.as_str(),
+                Some(unistd::Uid::from_raw(0)),
+                Some(unistd::Gid::from_raw(0))
+            )?;
+
+        }
+
+        self.do_exec("/sbin/init")?;
+        // self.do_exec("/bin/sh")?;
+
+        // let filtered_env : HashMap<String, String> =
+        //     env::vars().filter(|&(ref k, _)|
+        //         k == "TERM" || k == "TZ" || k == "LANG" || k == "PATH"
+        //     ).collect();
+        // // let mut filtered_env: HashMap<String, String> = HashMap::new();
+        // // filtered_env.insert(String::from("PATH"), String::from("/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin"));
+        // // filtered_env.insert(String::from("TERM"), String::from("xterm-256color"));
+        // // filtered_env.insert(String::from("LC_ALL"), String::from("C"));
+        // let downstream_output = Command::new("/bin/sh")
+        //     .stdout(Stdio::piped())
+        //     .stderr(Stdio::piped())
+        //     .envs(&filtered_env)
+        //     .output()?
+        //     .stdout;
+        // println!("{}", String::from_utf8_lossy(&downstream_output));
 
         Ok(())
     }
@@ -377,6 +441,7 @@ impl<'a> ContainerManager<'a> {
     }
 
     // TODO: Fix unwrap here
+    #[allow(dead_code)]
     pub fn run_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         let container_name = args.value_of("container-name").unwrap();
         self.run(container_name)
@@ -410,8 +475,8 @@ impl<'a> ContainerManager<'a> {
 
         // TODO: Add iproute2 check
 
-        if true {
-        // if false {
+        // if true {
+        if false {
             // networking::create_network_namespace(&container.id)?;
             networking::create_bridge(&container.id)?;
             networking::create_veth(&container.id)?;
@@ -428,8 +493,8 @@ impl<'a> ContainerManager<'a> {
             return Err(e);
         };
 
-        if true {
-        // if false {
+        // if true {
+        if false {
             networking::delete_container_from_network(&container.id)?;
             networking::remove_veth_from_bridge(&container.id)?;
             networking::delete_veth(&container.id)?;
@@ -437,13 +502,12 @@ impl<'a> ContainerManager<'a> {
             networking::delete_network_namespace(&container.id)?;
         }
 
-        self.cleanup(&container)?;
-
         info!("run successfull");
         Ok(())
     }
 
 
+    #[allow(dead_code)]
     pub fn delete_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         let container_name = args.value_of("container-name").unwrap();
         self.delete(container_name)

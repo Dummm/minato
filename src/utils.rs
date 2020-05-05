@@ -6,6 +6,7 @@ use crate::image::Image;
 use crate::container::Container;
 use crate::*;
 
+#[allow(dead_code)]
 pub fn run_command_from_string(opt_str: &str, image_manager: &image::ImageManager, container_manager: &container::ContainerManager) -> Result<(), Box<dyn std::error::Error>> {
     let opt: Opt = Opt::from_str(opt_str).unwrap();
     run_command(opt, image_manager, container_manager)?;

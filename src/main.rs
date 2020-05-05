@@ -23,6 +23,9 @@ pub struct Opt {
     #[structopt(short = "D", long)]
     debug: bool,
 
+    // #[structopt(short, long)]
+    // networking: bool,
+
     #[structopt(short, long,
         env = "RUST_LOG",
         default_value = crate_name!())]

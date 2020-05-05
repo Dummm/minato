@@ -243,6 +243,7 @@ impl<'a>  ImageManager<'a> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn pull_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         let image_id = args.value_of("image-id").unwrap();
         self.pull(image_id)
@@ -349,6 +350,7 @@ impl<'a>  ImageManager<'a> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn delete_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         let image_id = args.value_of("image-id").unwrap();
         self.delete(image_id)
