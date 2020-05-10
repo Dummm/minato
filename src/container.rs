@@ -275,6 +275,7 @@ impl<'a> ContainerManager<'a> {
             Mode::S_IRGRP |                 Mode::S_IXGRP |
             Mode::S_IROTH |                 Mode::S_IXOTH
         )?;
+
         utils::prepare_directory(
             rootfs,
             "dev",
@@ -282,6 +283,15 @@ impl<'a> ContainerManager<'a> {
             Mode::S_IRGRP |                 Mode::S_IXGRP |
             Mode::S_IROTH |                 Mode::S_IXOTH
         )?;
+
+        utils::prepare_directory(
+            rootfs,
+            "sys",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+
         utils::prepare_directory(
             rootfs,
             "proc",
@@ -405,6 +415,24 @@ impl<'a> ContainerManager<'a> {
         mount(
             Some("/proc"),
             "old_proc",
+            None::<&str>,
+            MsFlags::MS_BIND | MsFlags::MS_REC,
+            None::<&str>,
+        )?;
+
+        info!("mounting sys...");
+        mount(
+            Some("/sys"),
+            "sys",
+            None::<&str>,
+            MsFlags::MS_BIND | MsFlags::MS_REC,
+            None::<&str>,
+        )?;
+
+        info!("mounting dev...");
+        mount(
+            Some("/dev"),
+            "dev",
             None::<&str>,
             MsFlags::MS_BIND | MsFlags::MS_REC,
             None::<&str>,
