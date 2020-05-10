@@ -216,283 +216,6 @@ impl<'a> ContainerManager<'a> {
         Ok(())
     }
 
-    fn prepare_parent_filesystems(&self) -> Result<(), Box<dyn std::error::Error>> {
-        info!("making host mount namespace private...");
-        mount(
-            None::<&str>,
-            "/",
-            None::<&str>,
-            MsFlags::MS_REC | MsFlags::MS_PRIVATE,
-            None::<&str>,
-        )?;
-
-        Ok(())
-    }
-
-    fn prepare_container_filesystem(&self, container: &Container) -> Result<(), Box<dyn std::error::Error>> {
-        info!("preparing container...");
-
-        let rootfs_path_str = format!(
-            "{}/merged",
-            utils::get_container_path(container)?
-        );
-        let rootfs = rootfs_path_str.as_str();
-
-        info!("chdir to rootfs ({})...", rootfs);
-        chdir(rootfs)?;
-
-        info!("mounting root...");
-        mount(
-            Some(rootfs),
-            rootfs,
-            None::<&str>,
-            MsFlags::MS_BIND | MsFlags::MS_NOSUID,
-            None::<&str>,
-        )?;
-
-        utils::prepare_directory(rootfs, "put_old",
-            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
-            Mode::S_IRGRP |                 Mode::S_IXGRP |
-            Mode::S_IROTH |                 Mode::S_IXOTH
-        )?;
-
-        utils::prepare_directory(rootfs, "dev",
-            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
-            Mode::S_IRGRP |                 Mode::S_IXGRP |
-            Mode::S_IROTH |                 Mode::S_IXOTH
-        )?;
-
-        utils::prepare_directory(rootfs, "proc",
-            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
-            Mode::S_IRGRP |                 Mode::S_IXGRP |
-            Mode::S_IROTH |                 Mode::S_IXOTH
-        )?;
-        utils::prepare_directory(rootfs, "old_proc",
-            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
-            Mode::S_IRGRP |                 Mode::S_IXGRP |
-            Mode::S_IROTH |                 Mode::S_IXOTH
-        )?;
-
-        info!("mounting proc to old_proc...");
-        mount(
-            Some("/proc"),
-            "old_proc",
-            None::<&str>,
-            MsFlags::MS_BIND | MsFlags::MS_REC,
-            None::<&str>,
-        )?;
-
-        info!("mounting dev...");
-        mount(
-            Some("/dev"),
-            "dev",
-            None::<&str>,
-            MsFlags::MS_BIND | MsFlags::MS_REC,
-            None::<&str>,
-        )?;
-
-        // info!("writing uid_map...");
-        // // let uid = unistd::getuid();
-        // // let gid = unistd::getgid();
-        // let uid_path = format!("/proc/self/uid_map");
-        // let fd = open(uid_path.as_str(), OFlag::O_WRONLY, Mode::empty())?;
-        // unistd::write(fd, "0 0 100000".as_bytes())?;
-        // unistd::close(fd)?;
-
-        // info!("writing gid_map...");
-        // let gid_path = format!("/proc/self/gid_map");
-        // let fd = open(gid_path.as_str(), OFlag::O_WRONLY, Mode::empty())?;
-        // unistd::write(fd, "0 0 100000".as_bytes())?;
-        // unistd::close(fd)?;
-
-        // info!("setting ids");
-        // let root_uid = unistd::Uid::from_raw(0);
-        // let root_gid = unistd::Gid::from_raw(0);
-        // unistd::setresuid(root_uid, root_uid, root_uid)?;
-        // unistd::setresgid(root_gid, root_gid, root_gid)?;
-
-
-        // TODO: Mount 'data' for external access. Check if 'sys' is necessary
-
-        // TODO: Uncomment
-        // info!("creating ttys");
-        // for i in 0..7 {
-        //     info!("creating tty{}...", i);
-
-        //     let tty_path_str = format!("/dev/tty{}", i);
-        //     let perms =
-        //         Mode::S_IRUSR | Mode::S_IWUSR |
-        //         Mode::S_IRGRP | Mode::S_IWGRP |
-        //         Mode::S_IROTH | Mode::S_IWOTH;
-        //     if Path::new(tty_path_str.clone().as_str()).exists() {
-        //         info!("removing /dev/tty{}...", i);
-        //         fs::remove_file(tty_path_str.clone())?;
-        //     }
-        //     stat::mknod(
-        //         tty_path_str.clone().as_str(),
-        //         SFlag::S_IFCHR,
-        //         perms,
-        //         stat::makedev(4, i)
-        //     )?;
-        //     unistd::chown(
-        //         tty_path_str.as_str(),
-        //         Some(unistd::Uid::from_raw(0)),
-        //         Some(unistd::Gid::from_raw(0))
-        //     )?;
-
-        // }
-
-        Ok(())
-
-    }
-
-    // TODO: Check if stack values modifications are required
-    fn start_container_process(&self, container: &Container) -> Result<(), Box<dyn std::error::Error>> {
-        info!("cloning process...");
-
-        let rootfs_path_str = format!(
-            "{}/merged",
-            utils::get_container_path(container)?
-        );
-
-        let cb = Box::new(|| {
-            if let Err(e) = self.init(rootfs_path_str.as_str()) {
-                error!("unable to initialize container: {}", e);
-                if let Err(e) = self.cleanup(&container) {
-                    info!("error while cleaning up: {}", e);
-                };
-                -1
-            } else {
-                if let Err(e) = self.cleanup(&container) {
-                    info!("error while cleaning up: {}", e);
-                };
-                0
-            }
-        });
-        let stack = &mut [0; 1024 * 1024];
-        let mut clone_flags =
-            CloneFlags::CLONE_NEWUTS |
-            CloneFlags::CLONE_NEWPID |
-            CloneFlags::CLONE_NEWNS |
-            CloneFlags::CLONE_NEWIPC |
-            CloneFlags::CLONE_NEWUSER;
-        // if true {
-        if false {
-            clone_flags |= CloneFlags::CLONE_NEWNET;
-        }
-
-        let childpid = clone(
-            cb,
-            stack,
-            clone_flags,
-            None
-        )?;
-
-        info!("child pid: {}", childpid);
-        thread::sleep(time::Duration::from_millis(300));
-
-        // BUG: ip not installed
-        if false {
-        // if true {
-            networking::add_container_to_network(&container.id, childpid)?;
-        }
-
-        // TODO: Control through arguments
-        waitpid(childpid, None)?;
-
-        Ok(())
-    }
-
-    // TODO: Modularize
-    // TODO: Change from hostname and cmd from literals to variables
-    fn init(&self, rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
-        info!("initiating container...");
-
-        let prev_rootfs = Path::new(rootfs).join("put_old");
-        // info!("mounting root...");
-        // mount(
-        //     Some(rootfs),
-        //     rootfs,
-        //     None::<&str>,
-        //     MsFlags::MS_BIND | MsFlags::MS_REC | MsFlags::MS_NOSUID,
-        //     None::<&str>,
-        // )?;
-
-        info!("pivoting root... ({}, {})", rootfs, prev_rootfs.display());
-        // pivot_root(rootfs, &prev_rootfs)?;
-        pivot_root(".", "put_old")?;
-        chdir("/")?;
-        umount2("/put_old", MntFlags::MNT_DETACH)?;
-        if prev_rootfs.exists() {
-            info!("removing old 'put_old' folder...");
-            std::fs::remove_dir_all(&prev_rootfs)?;
-        }
-
-        info!("mounting proc...");
-        mount(
-            Some("/proc"),
-            "/proc",
-            Some("proc"),
-            MsFlags::MS_NOSUID,
-            None::<&str>,
-        )?;
-
-        info!("mounting root...");
-        mount(
-            Some("/"),
-            "/",
-            None::<&str>,
-            MsFlags::MS_BIND | MsFlags::MS_RDONLY | MsFlags::MS_NOSUID | MsFlags::MS_REMOUNT,
-            None::<&str>,
-        )?;
-
-
-        // info!("mounting proc...");
-        // mount(
-        //     Some("proc"),
-        //     "/proc",
-        //     Some("proc"),
-        //     MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_RELATIME,
-        //     None::<&str>,
-        // )?;
-
-        // info!("mounting tmpfs...");
-        // mount(
-        //     Some("tmpfs"),
-        //     "/dev",
-        //     Some("tmpfs"),
-        //     MsFlags::MS_NOSUID | MsFlags::MS_RELATIME,
-        //     None::<&str>,
-        // )?;
-
-        sethostname("test")?;
-
-        info!("uid: {} - euid: {}", unistd::Uid::current(), unistd::Uid::effective());
-        info!("gid: {} - egid: {}", unistd::Gid::current(), unistd::Gid::effective());
-
-        // self.do_exec("/sbin/init")?;
-        self.do_exec("/bin/sh")?;
-
-        // TODO: Pipe stdin/stdout
-        // let filtered_env : HashMap<String, String> =
-        //     env::vars().filter(|&(ref k, _)|
-        //         k == "TERM" || k == "TZ" || k == "LANG" || k == "PATH"
-        //     ).collect();
-        // // let mut filtered_env: HashMap<String, String> = HashMap::new();
-        // // filtered_env.insert(String::from("PATH"), String::from("/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin"));
-        // // filtered_env.insert(String::from("TERM"), String::from("xterm-256color"));
-        // // filtered_env.insert(String::from("LC_ALL"), String::from("C"));
-        // let downstream_output = Command::new("/bin/sh")
-        //     .stdout(Stdio::piped())
-        //     .stderr(Stdio::piped())
-        //     .envs(&filtered_env)
-        //     .output()?
-        //     .stdout;
-        // println!("{}", String::from_utf8_lossy(&downstream_output));
-
-        Ok(())
-    }
-
     fn do_exec(&self, cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing command execution...");
 
@@ -536,74 +259,94 @@ impl<'a> ContainerManager<'a> {
         Ok(())
     }
 
+    pub fn prepare_container_directories(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+        info!("preparing container directories...");
+
+        let rootfs_path_str = format!(
+            "{}/merged",
+            utils::get_container_path_with_str(container_name)?
+        );
+        let rootfs = rootfs_path_str.as_str();
+
+        utils::prepare_directory(
+            rootfs,
+            "put_old",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+        utils::prepare_directory(
+            rootfs,
+            "dev",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+        utils::prepare_directory(
+            rootfs,
+            "proc",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+        utils::prepare_directory(
+            rootfs,
+            "old_proc",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+
+        Ok(())
+    }
+
+    pub fn prepare_container_ids(&self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("preparing container ids...");
+
+        info!("uid: {} - euid: {}", unistd::Uid::current(), unistd::Uid::effective());
+        info!("gid: {} - egid: {}", unistd::Gid::current(), unistd::Gid::effective());
+
+        // let newuid = 3333;
+        // let newuid = 1000;
+        let newuid = 0;
+        // let uid = unistd::getuid();
+        let uid = 0;
+        let buf = format!("{} {} 1\n", newuid, uid);
+        let fd = open("/proc/self/uid_map", OFlag::O_WRONLY, Mode::empty())?;
+        info!("writing 'uid_map'");
+        unistd::write(fd, buf.as_bytes())?;
+        unistd::close(fd)?;
+
+        let fd = open("/proc/self/setgroups", OFlag::O_WRONLY, Mode::empty())?;
+        info!("writing 'deny' to setgroups");
+        unistd::write(fd, "deny".as_bytes())?;
+        unistd::close(fd)?;
+
+        // let newgid = 3333;
+        // let newgid = 1000;
+        let newgid = 0;
+        // let gid = unistd::getgid();
+        let gid = 0;
+        let buf = format!("{} {} 1\n", newgid, gid);
+        let fd = open("/proc/self/gid_map", OFlag::O_WRONLY, Mode::empty())?;
+        info!("writing 'gid_map' (could fail)");
+        unistd::write(fd, buf.as_bytes())?;
+        unistd::close(fd)?;
+
+        // info!("setting ids");
+        // let root_uid = unistd::Uid::from_raw(newuid);
+        // let root_gid = unistd::Gid::from_raw(newgid);
+        // unistd::setresuid(root_uid, root_uid, root_uid)?;
+        // unistd::setresgid(root_gid, root_gid, root_gid)?;
+
+        Ok(())
+    }
+
     // TODO: Fix unwrap here
     #[allow(dead_code)]
     pub fn run_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         let container_name = args.value_of("container-name").unwrap();
         self.run(container_name)
-    }
-
-    // TODO: Compile functions
-    pub fn run_old(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
-        info!("running container '{}'...", container_name);
-
-        info!("loading container...");
-        let container = match self.load_container(container_name).unwrap() {
-            Some(container) => container,
-            None            => {
-                info!("container not found. exiting...");
-                return Ok(())
-            }
-        };
-
-        self.mount_container_filesystem(&container)?;
-
-        let container_path_str = format!(
-            "{}/merged",
-            utils::get_container_path_with_str(container_name).unwrap()
-        );
-        let hosts = format!("{}/etc/hosts", container_path_str);
-        let resolv = format!("{}/etc/resolv.conf", container_path_str);
-
-        fs::copy("/etc/hosts", &hosts)?;
-        fs::copy("/etc/resolv.conf", &resolv)?;
-        info!("copied /etc/hosts and /etc/resolv.conf");
-
-        // TODO: Add iproute2 check
-
-        // if true {
-        if false {
-            // networking::create_network_namespace(&container.id)?;
-            networking::create_bridge(&container.id)?;
-            networking::create_veth(&container.id)?;
-            networking::add_veth_to_bridge(&container.id)?;
-        }
-
-        // Unmount mounted filesystem in case of error
-        if let Err(e) = self.prepare_parent_filesystems() {
-            self.cleanup(&container)?;
-            return Err(e);
-        };
-        if let Err(e) = self.prepare_container_filesystem(&container) {
-            self.cleanup(&container)?;
-            return Err(e);
-        };
-        if let Err(e) = self.start_container_process(&container) {
-            self.cleanup(&container)?;
-            return Err(e);
-        };
-
-        // if true {
-        if false {
-            networking::delete_container_from_network(&container.id)?;
-            networking::remove_veth_from_bridge(&container.id)?;
-            networking::delete_veth(&container.id)?;
-            networking::delete_bridge(&container.id)?;
-            networking::delete_network_namespace(&container.id)?;
-        }
-
-        info!("run successfull");
-        Ok(())
     }
 
     pub fn run(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -644,7 +387,6 @@ impl<'a> ContainerManager<'a> {
             utils::get_container_path_with_str(container_name)?
         );
         let rootfs = rootfs_path_str.as_str();
-
         info!("mounting rootfs...");
         mount(
             Some(rootfs),
@@ -657,34 +399,7 @@ impl<'a> ContainerManager<'a> {
         info!("chdir to rootfs ({})...", rootfs);
         chdir(rootfs)?;
 
-        utils::prepare_directory(
-            rootfs,
-            "put_old",
-            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
-            Mode::S_IRGRP |                 Mode::S_IXGRP |
-            Mode::S_IROTH |                 Mode::S_IXOTH
-        )?;
-        utils::prepare_directory(
-            rootfs,
-            "dev",
-            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
-            Mode::S_IRGRP |                 Mode::S_IXGRP |
-            Mode::S_IROTH |                 Mode::S_IXOTH
-        )?;
-        utils::prepare_directory(
-            rootfs,
-            "proc",
-            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
-            Mode::S_IRGRP |                 Mode::S_IXGRP |
-            Mode::S_IROTH |                 Mode::S_IXOTH
-        )?;
-        utils::prepare_directory(
-            rootfs,
-            "old_proc",
-            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
-            Mode::S_IRGRP |                 Mode::S_IXGRP |
-            Mode::S_IROTH |                 Mode::S_IXOTH
-        )?;
+        self.prepare_container_directories(container_name)?;
 
         info!("mounting proc to old_proc...");
         mount(
@@ -695,49 +410,15 @@ impl<'a> ContainerManager<'a> {
             None::<&str>,
         )?;
 
-        info!("uid: {} - euid: {}", unistd::Uid::current(), unistd::Uid::effective());
-        info!("gid: {} - egid: {}", unistd::Gid::current(), unistd::Gid::effective());
-
-        // let newuid = 3333;
-        // let newuid = 1000;
-        let newuid = 0;
-        // let uid = unistd::getuid();
-        let uid = 0;
-        let buf = format!("{} {} 1\n", newuid, uid);
-        let fd = open("/proc/self/uid_map", OFlag::O_WRONLY, Mode::empty())?;
-        info!("writing 'uid_map'");
-        unistd::write(fd, buf.as_bytes())?;
-        unistd::close(fd)?;
-
-        let fd = open("/proc/self/setgroups", OFlag::O_WRONLY, Mode::empty())?;
-        unistd::write(fd, "deny".as_bytes())?;
-        unistd::close(fd)?;
-
-        // let newgid = 3333;
-        // let newgid = 1000;
-        let newgid = 0;
-        // let gid = unistd::getgid();
-        let gid = 0;
-        let buf = format!("{} {} 1\n", newgid, gid);
-        let fd = open("/proc/self/gid_map", OFlag::O_WRONLY, Mode::empty())?;
-        info!("writing 'gid_map' (could fail)");
-        unistd::write(fd, buf.as_bytes())?;
-        unistd::close(fd)?;
-
-        // info!("setting ids");
-        // let root_uid = unistd::Uid::from_raw(newuid);
-        // let root_gid = unistd::Gid::from_raw(newgid);
-        // unistd::setresuid(root_uid, root_uid, root_uid)?;
-        // unistd::setresgid(root_gid, root_gid, root_gid)?;
+        self.prepare_container_ids()?;
 
         info!("pivoting root...");
         pivot_root(".", "put_old")?;
 
         info!("unmounting pivot auxiliary folder...");
         umount2("/put_old", MntFlags::MNT_DETACH)?;
-        info!("removing auxiliary folder...");
         if Path::new("/put_old").exists() {
-            info!("removing old 'put_old' folder...");
+            info!("removing auxiliary folder...");
             std::fs::remove_dir_all("/put_old")?;
         }
 
@@ -771,6 +452,7 @@ impl<'a> ContainerManager<'a> {
                     None::<&str>,
                 )?;
 
+                sethostname("test")?;
                 self.do_exec("/bin/sh")?;
 
                 info!("exiting...");
