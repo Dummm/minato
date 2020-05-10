@@ -226,6 +226,8 @@ impl FromStr for ContainerAction {
 // TODO: Safe daemon closing
 // TODO: Manage input and output from daemon
 // TODO: Add function end comment
+// TODO: Add ttys to new version
+// TODO: Refactorize code
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
