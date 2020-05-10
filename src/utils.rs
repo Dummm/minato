@@ -1,4 +1,8 @@
+use std::path::Path;
 use std::str::FromStr;
+use nix::sys::stat::{Mode};
+use nix::unistd::{mkdir};
+
 use structopt::StructOpt;
 use dirs;
 
@@ -105,3 +109,19 @@ pub fn get_container_path(container: &Container) -> Result<String, Box<dyn std::
     get_container_path_with_str(container.id.as_str())
 }
 
+pub fn prepare_directory(rootfs: &str, dir_name: &str, perms: Mode) -> Result<(), Box<dyn std::error::Error>> {
+    let dir_path = Path::new(rootfs).join(dir_name);
+
+    if dir_path.exists() {
+        info!("removing old '{}' folder...", dir_name);
+        std::fs::remove_dir_all(&dir_path)?;
+    }
+
+    info!("making new '{}' folder...", dir_name);
+    mkdir(
+        &dir_path,
+        perms
+    )?;
+
+    Ok(())
+}

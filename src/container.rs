@@ -14,6 +14,9 @@ use nix::sched::*;
 use nix::unistd::{chdir, execve, mkdir, pivot_root, sethostname};
 use nix::sys::stat::{self, Mode, SFlag};
 use nix::unistd;
+use nix::unistd::{fork, ForkResult};
+use nix::sys::wait::waitpid;
+use nix::fcntl::{open, OFlag};
 
 use dirs;
 use log::{info, error};
@@ -71,6 +74,7 @@ impl<'a> ContainerManager<'a> {
             container_list: Vec::new()
         }
     }
+
 
     fn create_directory_structure(&self, container: &Container) -> Result<(), Box<dyn std::error::Error>> {
         info!("creating container directory structure...");
@@ -137,42 +141,6 @@ impl<'a> ContainerManager<'a> {
     }
 
 
-    fn mount_container_filesystem(&self, container: &Container)  -> Result<(), Box<dyn std::error::Error>> {
-        info!("mounting container filesystem...");
-
-        let container_path_str = utils::get_container_path(container)?;
-        let container_path = Path::new(container_path_str.as_str());
-
-        // TODO: Fix this mess
-        let mut lowerdir_arg = "lowerdir=".to_string();
-        let subdirectories = container_path.join("lower").read_dir()?;
-        let subdirectories_vector = subdirectories
-            .map(|dir| format!("{}", dir.unwrap().path().display()))
-            .collect::<Vec<String>>();
-        let subdirectories_str = subdirectories_vector.join(":");
-        lowerdir_arg.push_str(subdirectories_str.as_str());
-
-        let upperdir_arg  = format!("upperdir={}/upper", container_path_str);
-        let workdir_arg   = format!("workdir={}/work", container_path_str);
-        let mergeddir_arg = format!("{}/merged", container_path_str);
-
-        let full_arg = format!("-o{},{},{}",
-            lowerdir_arg, upperdir_arg, workdir_arg
-        );
-        info!("using mount arguments: \n{}\n{}", full_arg, mergeddir_arg);
-
-        let output = Command::new("./fuse-overlayfs/fuse-overlayfs")
-            .arg(full_arg)
-            .arg(mergeddir_arg)
-            .output()
-            .unwrap();
-
-        info!("mount output: {}", output.status);
-        io::stdout().write_all(&output.stdout).unwrap();
-        io::stderr().write_all(&output.stderr).unwrap();
-
-        Ok(())
-    }
 
     // TODO: Find a better way to find image
     pub fn load_container(&self, container_name: &str) -> Result<Option<Container>, Box<dyn std::error::Error>> {
@@ -211,6 +179,43 @@ impl<'a> ContainerManager<'a> {
         Ok(Some(container))
     }
 
+    fn mount_container_filesystem(&self, container: &Container)  -> Result<(), Box<dyn std::error::Error>> {
+        info!("mounting container filesystem...");
+
+        let container_path_str = utils::get_container_path(container)?;
+        let container_path = Path::new(container_path_str.as_str());
+
+        // TODO: Fix this mess
+        let mut lowerdir_arg = "lowerdir=".to_string();
+        let subdirectories = container_path.join("lower").read_dir()?;
+        let subdirectories_vector = subdirectories
+            .map(|dir| format!("{}", dir.unwrap().path().display()))
+            .collect::<Vec<String>>();
+        let subdirectories_str = subdirectories_vector.join(":");
+        lowerdir_arg.push_str(subdirectories_str.as_str());
+
+        let upperdir_arg  = format!("upperdir={}/upper", container_path_str);
+        let workdir_arg   = format!("workdir={}/work", container_path_str);
+        let mergeddir_arg = format!("{}/merged", container_path_str);
+
+        let full_arg = format!("-o{},{},{}",
+            lowerdir_arg, upperdir_arg, workdir_arg
+        );
+        info!("using mount arguments: \n{}\n{}", full_arg, mergeddir_arg);
+
+        let output = Command::new("./fuse-overlayfs/fuse-overlayfs")
+            .arg(full_arg)
+            .arg(mergeddir_arg)
+            .output()
+            .unwrap();
+
+        info!("mount output: {}", output.status);
+        io::stdout().write_all(&output.stdout).unwrap();
+        io::stderr().write_all(&output.stderr).unwrap();
+
+        Ok(())
+    }
+
     fn prepare_parent_filesystems(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("making host mount namespace private...");
         mount(
@@ -222,6 +227,123 @@ impl<'a> ContainerManager<'a> {
         )?;
 
         Ok(())
+    }
+
+    fn prepare_container_filesystem(&self, container: &Container) -> Result<(), Box<dyn std::error::Error>> {
+        info!("preparing container...");
+
+        let rootfs_path_str = format!(
+            "{}/merged",
+            utils::get_container_path(container)?
+        );
+        let rootfs = rootfs_path_str.as_str();
+
+        info!("chdir to rootfs ({})...", rootfs);
+        chdir(rootfs)?;
+
+        info!("mounting root...");
+        mount(
+            Some(rootfs),
+            rootfs,
+            None::<&str>,
+            MsFlags::MS_BIND | MsFlags::MS_NOSUID,
+            None::<&str>,
+        )?;
+
+        utils::prepare_directory(rootfs, "put_old",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+
+        utils::prepare_directory(rootfs, "dev",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+
+        utils::prepare_directory(rootfs, "proc",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+        utils::prepare_directory(rootfs, "old_proc",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+
+        info!("mounting proc to old_proc...");
+        mount(
+            Some("/proc"),
+            "old_proc",
+            None::<&str>,
+            MsFlags::MS_BIND | MsFlags::MS_REC,
+            None::<&str>,
+        )?;
+
+        info!("mounting dev...");
+        mount(
+            Some("/dev"),
+            "dev",
+            None::<&str>,
+            MsFlags::MS_BIND | MsFlags::MS_REC,
+            None::<&str>,
+        )?;
+
+        // info!("writing uid_map...");
+        // // let uid = unistd::getuid();
+        // // let gid = unistd::getgid();
+        // let uid_path = format!("/proc/self/uid_map");
+        // let fd = open(uid_path.as_str(), OFlag::O_WRONLY, Mode::empty())?;
+        // unistd::write(fd, "0 0 100000".as_bytes())?;
+        // unistd::close(fd)?;
+
+        // info!("writing gid_map...");
+        // let gid_path = format!("/proc/self/gid_map");
+        // let fd = open(gid_path.as_str(), OFlag::O_WRONLY, Mode::empty())?;
+        // unistd::write(fd, "0 0 100000".as_bytes())?;
+        // unistd::close(fd)?;
+
+        // info!("setting ids");
+        // let root_uid = unistd::Uid::from_raw(0);
+        // let root_gid = unistd::Gid::from_raw(0);
+        // unistd::setresuid(root_uid, root_uid, root_uid)?;
+        // unistd::setresgid(root_gid, root_gid, root_gid)?;
+
+
+        // TODO: Mount 'data' for external access. Check if 'sys' is necessary
+
+        // TODO: Uncomment
+        // info!("creating ttys");
+        // for i in 0..7 {
+        //     info!("creating tty{}...", i);
+
+        //     let tty_path_str = format!("/dev/tty{}", i);
+        //     let perms =
+        //         Mode::S_IRUSR | Mode::S_IWUSR |
+        //         Mode::S_IRGRP | Mode::S_IWGRP |
+        //         Mode::S_IROTH | Mode::S_IWOTH;
+        //     if Path::new(tty_path_str.clone().as_str()).exists() {
+        //         info!("removing /dev/tty{}...", i);
+        //         fs::remove_file(tty_path_str.clone())?;
+        //     }
+        //     stat::mknod(
+        //         tty_path_str.clone().as_str(),
+        //         SFlag::S_IFCHR,
+        //         perms,
+        //         stat::makedev(4, i)
+        //     )?;
+        //     unistd::chown(
+        //         tty_path_str.as_str(),
+        //         Some(unistd::Uid::from_raw(0)),
+        //         Some(unistd::Gid::from_raw(0))
+        //     )?;
+
+        // }
+
+        Ok(())
+
     }
 
     // TODO: Check if stack values modifications are required
@@ -252,7 +374,8 @@ impl<'a> ContainerManager<'a> {
             CloneFlags::CLONE_NEWUTS |
             CloneFlags::CLONE_NEWPID |
             CloneFlags::CLONE_NEWNS |
-            CloneFlags::CLONE_NEWIPC;
+            CloneFlags::CLONE_NEWIPC |
+            CloneFlags::CLONE_NEWUSER;
         // if true {
         if false {
             clone_flags |= CloneFlags::CLONE_NEWNET;
@@ -275,7 +398,7 @@ impl<'a> ContainerManager<'a> {
         }
 
         // TODO: Control through arguments
-        // waitpid(childpid, None)?;
+        waitpid(childpid, None)?;
 
         Ok(())
     }
@@ -285,88 +408,70 @@ impl<'a> ContainerManager<'a> {
     fn init(&self, rootfs: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("initiating container...");
 
-        info!("making root private...");
-        mount(
-            Some(rootfs),
-            rootfs,
-            None::<&str>,
-            MsFlags::MS_BIND | MsFlags::MS_REC,
-            None::<&str>,
-        )?;
-
-        info!("removing old 'put_old' folder...");
         let prev_rootfs = Path::new(rootfs).join("put_old");
+        // info!("mounting root...");
+        // mount(
+        //     Some(rootfs),
+        //     rootfs,
+        //     None::<&str>,
+        //     MsFlags::MS_BIND | MsFlags::MS_REC | MsFlags::MS_NOSUID,
+        //     None::<&str>,
+        // )?;
+
+        info!("pivoting root... ({}, {})", rootfs, prev_rootfs.display());
+        // pivot_root(rootfs, &prev_rootfs)?;
+        pivot_root(".", "put_old")?;
+        chdir("/")?;
+        umount2("/put_old", MntFlags::MNT_DETACH)?;
         if prev_rootfs.exists() {
+            info!("removing old 'put_old' folder...");
             std::fs::remove_dir_all(&prev_rootfs)?;
         }
 
-        info!("making new 'put_old' folder...");
-        mkdir(
-            &prev_rootfs,
-            stat::Mode::S_IRWXU | stat::Mode::S_IRWXG | stat::Mode::S_IRWXO,
-        )?;
-
-        info!("pivoting root...");
-        pivot_root(rootfs, &prev_rootfs)?;
-        chdir("/")?;
-        umount2("/put_old", MntFlags::MNT_DETACH)?;
-
         info!("mounting proc...");
         mount(
-            Some("proc"),
+            Some("/proc"),
             "/proc",
             Some("proc"),
-            MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_RELATIME,
+            MsFlags::MS_NOSUID,
             None::<&str>,
         )?;
 
-        info!("mounting tmpfs...");
+        info!("mounting root...");
         mount(
-            Some("tmpfs"),
-            "/dev",
-            Some("tmpfs"),
-            MsFlags::MS_NOSUID | MsFlags::MS_RELATIME,
+            Some("/"),
+            "/",
+            None::<&str>,
+            MsFlags::MS_BIND | MsFlags::MS_RDONLY | MsFlags::MS_NOSUID | MsFlags::MS_REMOUNT,
             None::<&str>,
         )?;
+
+
+        // info!("mounting proc...");
+        // mount(
+        //     Some("proc"),
+        //     "/proc",
+        //     Some("proc"),
+        //     MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_RELATIME,
+        //     None::<&str>,
+        // )?;
+
+        // info!("mounting tmpfs...");
+        // mount(
+        //     Some("tmpfs"),
+        //     "/dev",
+        //     Some("tmpfs"),
+        //     MsFlags::MS_NOSUID | MsFlags::MS_RELATIME,
+        //     None::<&str>,
+        // )?;
 
         sethostname("test")?;
 
         info!("uid: {} - euid: {}", unistd::Uid::current(), unistd::Uid::effective());
         info!("gid: {} - egid: {}", unistd::Gid::current(), unistd::Gid::effective());
 
-        info!("creating devices...");
-        if !Path::new("dev").exists() {
-            fs::create_dir("dev")?;
-        }
-        info!("creating ttys");
-        for i in 0..7 {
-            info!("creating tty{}...", i);
-
-            let tty_path_str = format!("/dev/tty{}", i);
-            let perms =
-                Mode::S_IRUSR | Mode::S_IWUSR |
-                Mode::S_IRGRP | Mode::S_IWGRP |
-                Mode::S_IROTH | Mode::S_IWOTH;
-            if Path::new(tty_path_str.clone().as_str()).exists() {
-                info!("removing /dev/tty1...");
-                fs::remove_file(tty_path_str.clone())?;
-            }
-            stat::mknod(
-                tty_path_str.clone().as_str(),
-                SFlag::S_IFCHR,
-                perms,
-                stat::makedev(4, i)
-            )?;
-            unistd::chown(
-                tty_path_str.as_str(),
-                Some(unistd::Uid::from_raw(0)),
-                Some(unistd::Gid::from_raw(0))
-            )?;
-
-        }
-
-        self.do_exec("/sbin/init")?;
-        // self.do_exec("/bin/sh")?;
+        // self.do_exec("/sbin/init")?;
+        self.do_exec("/bin/sh")?;
 
         // TODO: Pipe stdin/stdout
         // let filtered_env : HashMap<String, String> =
@@ -439,7 +544,7 @@ impl<'a> ContainerManager<'a> {
     }
 
     // TODO: Compile functions
-    pub fn run(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run_old(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("running container '{}'...", container_name);
 
         info!("loading container...");
@@ -479,6 +584,10 @@ impl<'a> ContainerManager<'a> {
             self.cleanup(&container)?;
             return Err(e);
         };
+        if let Err(e) = self.prepare_container_filesystem(&container) {
+            self.cleanup(&container)?;
+            return Err(e);
+        };
         if let Err(e) = self.start_container_process(&container) {
             self.cleanup(&container)?;
             return Err(e);
@@ -497,6 +606,188 @@ impl<'a> ContainerManager<'a> {
         Ok(())
     }
 
+    pub fn run(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+        info!("running container '{}'...", container_name);
+
+        info!("loading container...");
+        let container = match self.load_container(container_name).unwrap() {
+            Some(container) => container,
+            None            => {
+                info!("container not found. exiting...");
+                return Ok(())
+            }
+        };
+
+        info!("mounting overlayfs...");
+        self.mount_container_filesystem(&container)?;
+
+        let clone_flags =
+            CloneFlags::CLONE_NEWPID |
+            CloneFlags::CLONE_NEWNS |
+            CloneFlags::CLONE_NEWUTS |
+            CloneFlags::CLONE_NEWIPC |
+            CloneFlags::CLONE_NEWUSER;
+        info!("unsharing...");
+        unshare(clone_flags)?;
+
+        info!("making root private...");
+        mount(
+            None::<&str>,
+            "/",
+            None::<&str>,
+            MsFlags::MS_REC | MsFlags::MS_PRIVATE,
+            None::<&str>,
+        )?;
+
+        let rootfs_path_str = format!(
+            "{}/merged",
+            utils::get_container_path_with_str(container_name)?
+        );
+        let rootfs = rootfs_path_str.as_str();
+
+        info!("mounting rootfs...");
+        mount(
+            Some(rootfs),
+            rootfs,
+            None::<&str>,
+            MsFlags::MS_BIND | MsFlags::MS_NOSUID,
+            None::<&str>,
+        )?;
+
+        info!("chdir to rootfs ({})...", rootfs);
+        chdir(rootfs)?;
+
+        utils::prepare_directory(
+            rootfs,
+            "put_old",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+        utils::prepare_directory(
+            rootfs,
+            "dev",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+        utils::prepare_directory(
+            rootfs,
+            "proc",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+        utils::prepare_directory(
+            rootfs,
+            "old_proc",
+            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IXUSR |
+            Mode::S_IRGRP |                 Mode::S_IXGRP |
+            Mode::S_IROTH |                 Mode::S_IXOTH
+        )?;
+
+        info!("mounting proc to old_proc...");
+        mount(
+            Some("/proc"),
+            "old_proc",
+            None::<&str>,
+            MsFlags::MS_BIND | MsFlags::MS_REC,
+            None::<&str>,
+        )?;
+
+        info!("uid: {} - euid: {}", unistd::Uid::current(), unistd::Uid::effective());
+        info!("gid: {} - egid: {}", unistd::Gid::current(), unistd::Gid::effective());
+
+        // let newuid = 3333;
+        // let newuid = 1000;
+        let newuid = 0;
+        // let uid = unistd::getuid();
+        let uid = 0;
+        let buf = format!("{} {} 1\n", newuid, uid);
+        let fd = open("/proc/self/uid_map", OFlag::O_WRONLY, Mode::empty())?;
+        info!("writing 'uid_map'");
+        unistd::write(fd, buf.as_bytes())?;
+        unistd::close(fd)?;
+
+        let fd = open("/proc/self/setgroups", OFlag::O_WRONLY, Mode::empty())?;
+        unistd::write(fd, "deny".as_bytes())?;
+        unistd::close(fd)?;
+
+        // let newgid = 3333;
+        // let newgid = 1000;
+        let newgid = 0;
+        // let gid = unistd::getgid();
+        let gid = 0;
+        let buf = format!("{} {} 1\n", newgid, gid);
+        let fd = open("/proc/self/gid_map", OFlag::O_WRONLY, Mode::empty())?;
+        info!("writing 'gid_map' (could fail)");
+        unistd::write(fd, buf.as_bytes())?;
+        unistd::close(fd)?;
+
+        // info!("setting ids");
+        // let root_uid = unistd::Uid::from_raw(newuid);
+        // let root_gid = unistd::Gid::from_raw(newgid);
+        // unistd::setresuid(root_uid, root_uid, root_uid)?;
+        // unistd::setresgid(root_gid, root_gid, root_gid)?;
+
+        info!("pivoting root...");
+        pivot_root(".", "put_old")?;
+
+        info!("unmounting pivot auxiliary folder...");
+        umount2("/put_old", MntFlags::MNT_DETACH)?;
+        info!("removing auxiliary folder...");
+        if Path::new("/put_old").exists() {
+            info!("removing old 'put_old' folder...");
+            std::fs::remove_dir_all("/put_old")?;
+        }
+
+        match unistd::fork() {
+            Ok(ForkResult::Child) => {
+                info!("child pid: {}", unistd::getpid());
+
+                info!("mounting proc...");
+                mount(
+                    Some("/proc"),
+                    "/proc",
+                    Some("proc"),
+                    MsFlags::MS_NOSUID,
+                    None::<&str>,
+                )?;
+
+                info!("unmounting proc folder...");
+                umount2("/old_proc", MntFlags::MNT_DETACH)?;
+                info!("removing proc auxiliary folder...");
+                if Path::new("/old_proc").exists() {
+                    info!("removing old 'old_proc' folder...");
+                    std::fs::remove_dir_all("/old_proc")?;
+                }
+
+                info!("mounting root...");
+                mount(
+                    Some("/"),
+                    "/",
+                    None::<&str>,
+                    MsFlags::MS_BIND | MsFlags::MS_RDONLY | MsFlags::MS_NOSUID, // | MsFlags::MS_REMOUNT,
+                    None::<&str>,
+                )?;
+
+                self.do_exec("/bin/sh")?;
+
+                info!("exiting...");
+                std::process::exit(0);
+            }
+            Ok(ForkResult::Parent { child, .. }) => {
+                info!("aici");
+                waitpid(child, None)?;
+            }
+
+            Err(_) => {}
+        };
+
+        info!("aici aici");
+        Ok(())
+
+    }
 
     #[allow(dead_code)]
     pub fn delete_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
