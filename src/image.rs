@@ -1,15 +1,13 @@
-use std::path::{Path, PathBuf};
-use std::fs::{self, File};
-use std::io;
+use std::io::copy;
+use std::fs::{create_dir_all, File, remove_file, remove_dir_all};
+use std::path::Path;
 
 use log::info;
 use reqwest;
 use serde_json::{self, Value};
 use tar::Archive;
 use flate2::read::GzDecoder;
-
 extern crate clap;
-use clap::ArgMatches;
 
 use crate::utils;
 
@@ -21,6 +19,7 @@ pub struct Image {
     pub name: String,
     pub reference: String,
     pub fs_layers: Vec<String>,
+    pub path: String
 }
 // TODO: Control better how layers are added (load automatically)
 // TODO: Move load, add 'exists' function
@@ -30,11 +29,14 @@ impl Image {
         let id = utils::fix_image_id(image_id).unwrap();
         let (image_name, image_reference) = utils::split_image_id(id.clone()).unwrap();
 
+        let path = utils::get_image_path_with_str(id.as_str()).unwrap();
+
         Image {
-            id: id,
+            id,
             name: image_name,
             reference: image_reference,
             fs_layers: Vec::<String>::new(),
+            path
         }
     }
 
@@ -42,45 +44,23 @@ impl Image {
     pub fn load(image_id: &str) -> Result<Option<Image>, Box<dyn std::error::Error>> {
         let mut image = Image::new(image_id);
 
-        let image_path = match image.get_path().unwrap() {
-            Some(path) => path,
-            None       => return Ok(None)
+        let image_path = Path::new(&image.path);
+        if !image_path.exists() {
+            return Ok(None);
         };
 
         let layers = image_path.read_dir()?;
         image.fs_layers = layers
-            .map(|dir| format!("{}",
-                dir.unwrap()
-                .path()
-                .file_name().unwrap()
-                .to_str().unwrap()))
+            .map(|dir|
+                format!("{}",
+                    dir.unwrap()
+                    .path()
+                    .file_name().unwrap()
+                    .to_str().unwrap()))
             .collect::<Vec<String>>()
             .clone();
 
         Ok(Some(image))
-    }
-
-    pub fn get_path(&self) -> Result<Option<PathBuf>, Box<dyn std::error::Error>>{
-        let image_path_str = utils::get_image_path(&self)?;
-        let image_path = Path::new(image_path_str.as_str());
-
-        if !image_path.exists() {
-            return Ok(None)
-        }
-
-        Ok(Some(PathBuf::from(image_path)))
-    }
-}
-
-
-pub struct ImageManager<'a> {
-    image_list: Vec<&'a Image>
-}
-impl<'a>  ImageManager<'a> {
-    pub fn new() -> ImageManager<'a> {
-        ImageManager {
-            image_list: Vec::new()
-        }
     }
 
     fn get_authentication_token(&self, auth_url: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -99,7 +79,6 @@ impl<'a>  ImageManager<'a> {
 
         Ok(token.clone())
     }
-
     fn get_image_json(&self, token: &str, manifests_url: &str) -> Result<Value, Box<dyn std::error::Error>> {
         info!("sending manifests request to: {}...", manifests_url);
 
@@ -112,10 +91,9 @@ impl<'a>  ImageManager<'a> {
 
         Ok(body)
     }
-
-    fn write_image_json(&self, image_id: &str, body: Value) -> Result<(), Box<dyn std::error::Error>> {
+    fn write_image_json(&self, body: Value) -> Result<(), Box<dyn std::error::Error>> {
         info!("writing image json...");
-        let image_id = utils::fix_image_id(image_id).unwrap();
+        let image_id = utils::fix_image_id(&self.id).unwrap();
 
         let home = match dirs::home_dir() {
             Some(path) => path,
@@ -128,7 +106,7 @@ impl<'a>  ImageManager<'a> {
         let json_directory_path = Path::new(json_directory_path_str.as_str());
 
         if !json_directory_path.exists() {
-            fs::create_dir_all(json_directory_path)?;
+            create_dir_all(json_directory_path)?;
         }
 
         let json_name = format!(
@@ -142,7 +120,6 @@ impl<'a>  ImageManager<'a> {
 
         Ok(())
     }
-
     fn extract_layers_from_body(&self, body: Value) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
         info!("extracting fs_layers...");
 
@@ -154,22 +131,21 @@ impl<'a>  ImageManager<'a> {
 
         Ok(fs_layers.clone())
     }
-
-    fn download_layer(&self, image: &mut Image, token: &str, fs_layer: &Value) -> Result<(), Box<dyn std::error::Error>> {
+    fn download_layer(&mut self, token: &str, fs_layer: &Value) -> Result<(), Box<dyn std::error::Error>> {
         if let Value::String(blob_sum) = &fs_layer["blobSum"] {
             let digest = blob_sum.replace("sha256:", "");
             // let digest = blob_sum.split_off(blob_sum.find(':')?);
-            let image_path_str = utils::get_image_path(image)?;
+
             let tar_path = format!(
                 "{}/{}.tar.gz",
-                image_path_str, digest
+                &self.path, digest
             );
 
-            image.fs_layers.push(digest.clone());
+            self.fs_layers.push(digest.clone());
 
             let blob_url = format!(
                 "https://registry.hub.docker.com/v2/{}/blobs/{}",
-                image.name, blob_sum
+                self.name, blob_sum
             );
 
             let mut response = reqwest::blocking::Client::new()
@@ -177,7 +153,7 @@ impl<'a>  ImageManager<'a> {
                 .bearer_auth(token)
                 .send()?;
             let mut tar_output = File::create(&tar_path)?;
-            io::copy(&mut response, &mut tar_output)?;
+            copy(&mut response, &mut tar_output)?;
         } else {
             return Err("blobSum not found".into());
         }
@@ -185,13 +161,12 @@ impl<'a>  ImageManager<'a> {
 
         Ok(())
     }
-
     // TODO: Change the way unpacking is skipped
-    fn unpack_image_layers(&self, image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
+    fn unpack_image_layers(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("unpacking image layers...");
 
-        for fs_layer in &image.fs_layers {
-            let image_path_str = utils::get_image_path(image)?;
+        for fs_layer in &self.fs_layers {
+            let image_path_str = utils::get_image_path(&self)?;
             let layer_path = format!(
                 "{}/{}",
                 image_path_str, fs_layer
@@ -205,7 +180,7 @@ impl<'a>  ImageManager<'a> {
             let mut archive = Archive::new(tar);
 
             if !Path::new(layer_path.as_str()).exists() {
-                fs::create_dir_all(layer_path.clone())?;
+                create_dir_all(layer_path.clone())?;
                 archive.unpack(layer_path)?;
                 info!("unpacked layer {}", fs_layer);
             } else {
@@ -217,16 +192,14 @@ impl<'a>  ImageManager<'a> {
 
         Ok(())
     }
-
     // TODO: Check if file exists before removal?
-    fn remove_archives(&self, image: &mut Image) -> Result<(), Box<dyn std::error::Error>> {
+    fn remove_archives(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("cleaning up image directory...");
 
-        for fs_layer in &image.fs_layers {
-            let image_path_str = utils::get_image_path(image)?;
+        for fs_layer in &self.fs_layers {
             let layer_path = format!(
                 "{}/{}",
-                image_path_str, fs_layer
+                &self.path, fs_layer
             );
             let tar_path = format!(
                 "{}.tar.gz",
@@ -234,7 +207,7 @@ impl<'a>  ImageManager<'a> {
             );
 
             if Path::new(&tar_path).exists() {
-                fs::remove_file(tar_path)?;
+                remove_file(tar_path)?;
             }
             info!("removed archive layer {}", fs_layer);
         }
@@ -242,64 +215,54 @@ impl<'a>  ImageManager<'a> {
         info!("cleaned up successfully");
         Ok(())
     }
-
-    #[allow(dead_code)]
-    pub fn pull_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-        let image_id = args.value_of("image-id").unwrap();
-        self.pull(image_id)
-    }
-
-    // TODO: Modularize
-    pub fn pull(&self, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        info!("pulling image...");
-
-        // let mut image = match Image::load(image_id).unwrap() {
-        //         Some(image) => image,
-        //         None => Image::new(image_id)
-        //     };
-        let mut image = Image::new(image_id);
-        info!("image: {} {} {}", image.id, image.name, image.reference);
-
-        let image_path_str = utils::get_image_path(&image)?;
-        if Path::new(image_path_str.as_str()).exists() {
-            info!("image exists. skipping pull...");
-            return Ok(())
-        }
+    fn pull_from_docker(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("pulling image from docker repository...");
 
         let authentication_url = format!(
             "https://auth.docker.io/token?service=registry.docker.io&scope=repository:{}:pull",
-            image.name
+            &self.name
         );
         let token = self.get_authentication_token(authentication_url.as_str())?;
 
         let manifests_url = format!(
             "https://registry.hub.docker.com/v2/{}/manifests/{}",
-            image.name, image.reference
+            &self.name, &self.reference
         );
         let json = self.get_image_json(token.as_str(), manifests_url.as_str())?;
-        self.write_image_json(image_id, json.clone())?;
+        self.write_image_json(json.clone())?;
         let fs_layers = self.extract_layers_from_body(json)?;
 
         info!("creating image directory...");
-        fs::create_dir_all(image_path_str)?;
+        create_dir_all(&self.path)?;
 
         let number_of_layers = fs_layers.len();
         for (index, fs_layer) in fs_layers.iter().enumerate() {
             info!("downloading layer {} out of {}...", index + 1, number_of_layers);
-            self.download_layer(&mut image, token.as_str(), &fs_layer).expect("download failed");
+            self.download_layer(token.as_str(), &fs_layer).expect("download failed");
         }
 
-        self.unpack_image_layers(&mut image)?;
+        self.unpack_image_layers()?;
 
-        self.remove_archives(&mut image)?;
+        self.remove_archives()?;
+
+        info!("image pulled successfully...");
+        Ok(())
+    }
+    pub fn pull(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("pulling image...");
+
+        if Path::new(&self.path).exists() {
+            info!("image exists. skipping pull...");
+            return Ok(())
+        }
+
+        self.pull_from_docker()?;
 
         Ok(())
     }
 
-    fn delete_image_json(&self, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn delete_image_json(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting image json...");
-
-        let image_id = utils::fix_image_id(image_id).unwrap();
 
         let home = match dirs::home_dir() {
             Some(path) => path,
@@ -313,7 +276,7 @@ impl<'a>  ImageManager<'a> {
 
         let json_name = format!(
             "{}.json",
-            image_id.replace("/", "_")
+            &self.id.replace("/", "_")
         );
         let json_path = json_directory_path.join(json_name);
 
@@ -323,48 +286,41 @@ impl<'a>  ImageManager<'a> {
             return Ok(())
         }
 
-        fs::remove_file(json_path)?;
+        remove_file(json_path)?;
         info!("image json deleted succesfully");
 
         Ok(())
     }
 
-    fn delete_image_directory(&self, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn delete_image_directory(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting image directory...");
 
-        let id = utils::fix_image_id(image_id).unwrap().clone();
-
-        let image_path_str = utils::get_image_path_with_str(id.as_str())?;
-        let image_path = Path::new(image_path_str.as_str());
-
+        let image_path = Path::new(&self.path);
         info!("image path: {}", image_path.display());
         if !image_path.exists() {
             info!("image not found. skipping deletion...");
             return Ok(())
         }
 
-        fs::remove_dir_all(image_path)?;
+        remove_dir_all(image_path)?;
 
-        info!("directory deletion successful");
-
+        info!("directory deleted successfully");
         Ok(())
     }
-
-    #[allow(dead_code)]
-    pub fn delete_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-        let image_id = args.value_of("image-id").unwrap();
-        self.delete(image_id)
-    }
-
-    pub fn delete(&self, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn delete(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting image...");
 
-        let id = utils::fix_image_id(image_id).unwrap().clone();
+        if !Path::new(&self.path).exists() {
+            info!("image doesn't exists. skipping pull...");
+            return Ok(())
+        }
 
-        self.delete_image_json(id.as_str())?;
-        self.delete_image_directory(image_id)?;
+        self.delete_image_json()?;
+        self.delete_image_directory()?;
 
-        info!("deletion successfull");
+        info!("image deleted successfully");
         Ok(())
     }
+
 }
+

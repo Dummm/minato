@@ -7,7 +7,9 @@ use structopt::{StructOpt, clap::crate_name};
 use log::info;
 
 mod image;
+mod image_manager;
 mod container;
+mod container_manager;
 mod utils;
 mod networking;
 mod daemon;
@@ -230,7 +232,10 @@ impl FromStr for ContainerAction {
 // TODO: Refactorize code
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+    env_logger::builder()
+        .format_indent(Some(4))
+        .format_timestamp_millis()
+        .init();
 
     let opt = Opt::from_args();
     // println!("{:?}", opt);
@@ -275,8 +280,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     } else {
         info!("running in daemonless mode");
 
-        let image_manager = image::ImageManager::new();
-        let container_manager = container::ContainerManager::new();
+        let image_manager = image_manager::ImageManager::new();
+        let container_manager = container_manager::ContainerManager::new();
 
         utils::run_command(opt, &image_manager, &container_manager)
     }

@@ -6,18 +6,20 @@ use nix::unistd::{mkdir};
 use structopt::StructOpt;
 use dirs;
 
-use crate::image::Image;
-use crate::container::Container;
 use crate::*;
+use crate::image::Image;
+use crate::image_manager::ImageManager;
+use crate::container::Container;
+use crate::container_manager::ContainerManager;
 
 #[allow(dead_code)]
-pub fn run_command_from_string(opt_str: &str, image_manager: &image::ImageManager, container_manager: &container::ContainerManager) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run_command_from_string(opt_str: &str, image_manager: &ImageManager, container_manager: &ContainerManager) -> Result<(), Box<dyn std::error::Error>> {
     let opt: Opt = Opt::from_str(opt_str).unwrap();
     run_command(opt, image_manager, container_manager)?;
     Ok(())
 }
 
-pub fn run_command(opt: Opt, image_manager: &image::ImageManager, container_manager: &container::ContainerManager) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run_command(opt: Opt, image_manager: &ImageManager, container_manager: &ContainerManager) -> Result<(), Box<dyn std::error::Error>> {
     match opt.subcommand {
         Some(Subcommand::Image  { action }) => match action {
             ImageAction::Pull   { image_id } => image_manager.pull(&image_id),
@@ -113,7 +115,7 @@ pub fn prepare_directory(rootfs: &str, dir_name: &str, perms: Mode) -> Result<()
     let dir_path = Path::new(rootfs).join(dir_name);
 
     if dir_path.exists() {
-        info!("removing old '{}' folder...", dir_name);
+        info!("removing old '{}' folder...", dir_path.display());
         std::fs::remove_dir_all(&dir_path)?;
     }
 

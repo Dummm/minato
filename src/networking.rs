@@ -167,6 +167,7 @@ pub fn remove_veth_from_bridge(container_id: &str) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Result<(), Box<dyn std::error::Error>> {
     info!("adding container to network...");
 

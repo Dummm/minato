@@ -10,15 +10,15 @@ use std::str::FromStr;
 use log::info;
 
 use crate::utils;
-use crate::image;
-use crate::container;
+use crate::image_manager::ImageManager;
+use crate::container_manager::ContainerManager;
 use crate::Opt;
 
 
 pub struct Daemon<'a> {
     listener: UnixListener,
-    image_manager: image::ImageManager<'a>,
-    container_manager: container::ContainerManager<'a>
+    image_manager: ImageManager<'a>,
+    container_manager: ContainerManager<'a>
 }
 // impl Drop for Daemon {
 //     fn drop(&mut self) {
@@ -45,8 +45,8 @@ impl<'a> Daemon<'a> {
 
         Ok(Daemon {
             listener: socket,
-            image_manager: image::ImageManager::new(),
-            container_manager: container::ContainerManager::new()
+            image_manager: ImageManager::new(),
+            container_manager: ContainerManager::new()
         })
     }
 
