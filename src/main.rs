@@ -165,8 +165,16 @@ enum ContainerAction {
     Run {
         #[structopt(name = "container-name",
             about = "Container name",
-            short = "c", long = "container-nane")]
+            short = "c", long = "container-name")]
         container_name: String,
+    },
+
+    #[structopt(name = "open", about = "Open a container")]
+    Open {
+        #[structopt(name = "container-pid",
+            about = "Container pid",
+            short = "p", long = "container-pid")]
+        container_pid: String,
     },
 
     #[structopt(name = "delete", about = "Delete a container")]

@@ -5,7 +5,7 @@ use std::os::unix;
 use std::ffi::CString;
 use nix::mount::{mount, MntFlags, MsFlags, umount, umount2};
 use nix::sched::{CloneFlags, unshare};
-use nix::sys::stat::Mode;
+use nix::sys::stat::{Mode};
 use nix::sys::wait::waitpid;
 use nix::unistd::*;
 use nix::fcntl::{open, OFlag};
@@ -152,7 +152,8 @@ impl Container {
         let upperdir_arg  = format!("upperdir={}/upper", &self.path);
         let workdir_arg   = format!("workdir={}/work",   &self.path);
         let mergeddir_arg = format!("{}/merged",         &self.path);
-        let full_arg = format!("{},{},{},index=on",
+        // let full_arg = format!("{},{},{},index=on",
+        let full_arg = format!("{},{},{}",
             lowerdir_arg, upperdir_arg, workdir_arg
         );
         info!("mount arguments: \n{}\n{}\n{}\n{}",
@@ -273,6 +274,9 @@ impl Container {
         info!("preparing container networking...");
 
         info!("binding to parent /etc/hosts...");
+        if !Path::new("etc/hosts").exists() {
+            fs::File::create("etc/hosts")?;
+        }
         mount(
             Some("/etc/hosts"),
             "etc/hosts",
@@ -280,7 +284,11 @@ impl Container {
             MsFlags::MS_BIND | MsFlags::MS_NOSUID | MsFlags::MS_NODEV,
             None::<&str>,
         )?;
+
         info!("binding to parent resolv.conf...");
+        if !Path::new("etc/resolv.conf").exists() {
+            fs::File::create("etc/resolv.conf")?;
+        }
         mount(
             Some("/etc/resolv.conf"),
             "etc/resolv.conf",
@@ -322,6 +330,7 @@ impl Container {
             None::<&str>,
         )?;
 
+        // Slashes?
         info!("mounting dev...");
         mount(
             Some("/dev"),
@@ -330,6 +339,65 @@ impl Container {
             MsFlags::MS_BIND | MsFlags::MS_REC,
             None::<&str>,
         )?;
+
+        // info!("populating /dev...");
+        // if !Path::new("dev").exists() {
+        //     fs::create_dir("dev")?;
+        // }
+        // let tty_path_str = format!("/dev/tty");
+        // let perms =
+        //     Mode::S_IRUSR | Mode::S_IWUSR |
+        //     Mode::S_IRGRP | Mode::S_IWGRP |
+        //     Mode::S_IROTH | Mode::S_IWOTH;
+        // if Path::new(tty_path_str.clone().as_str()).exists() {
+        //     info!("removing /dev/tty...");
+        //     fs::remove_file(tty_path_str.clone())?;
+        // }
+        // let dev = makedev(5, 0);
+        // info!("dev: {}", dev);
+        // info!("mknod");
+        // mknod(
+        //     tty_path_str.clone().as_str(),
+        //     SFlag::S_IFCHR,
+        //     perms,
+        //     dev
+        // )?;
+        // info!("chown");
+        // chown(
+        //     tty_path_str.as_str(),
+        //     Some(Uid::from_raw(0)),
+        //     Some(Gid::from_raw(0))
+        // )?;
+
+        // info!("creating ttys");
+        // for i in 0..7 {
+        //     info!("creating tty{}...", i);
+
+        //     let tty_path_str = format!("/dev/tty{}", i);
+        //     let perms =
+        //         Mode::S_IRUSR | Mode::S_IWUSR |
+        //         Mode::S_IRGRP | Mode::S_IWGRP |
+        //         Mode::S_IROTH | Mode::S_IWOTH;
+        //     if Path::new(tty_path_str.clone().as_str()).exists() {
+        //         info!("removing /dev/tty{}...", i);
+        //         fs::remove_file(tty_path_str.clone())?;
+        //     }
+        //     let dev = makedev(4, i);
+        //     info!("dev: {}", dev);
+        //     info!("mknod");
+        //     mknod(
+        //         tty_path_str.clone().as_str(),
+        //         SFlag::S_IFCHR,
+        //         perms,
+        //         dev
+        //     )?;
+        //     info!("chown");
+        //     chown(
+        //         tty_path_str.as_str(),
+        //         Some(Uid::from_raw(0)),
+        //         Some(Gid::from_raw(0))
+        //     )?;
+        // }
 
         info!("container directories mounted successfully...");
         Ok(())
@@ -404,6 +472,7 @@ impl Container {
 
                 sethostname("test")?;
                 self.do_exec("/bin/sh")?;
+                // self.do_exec("/sbin/init")?;
 
                 // Should not reach
                 info!("exiting child process...");
@@ -411,6 +480,7 @@ impl Container {
             }
             Ok(ForkResult::Parent { child, .. }) => {
                 info!("running parent process...");
+                info!("inner fork child pid: {}", child);
 
                 info!("waiting for child...");
                 waitpid(child, None)?;
@@ -537,6 +607,7 @@ impl Container {
                 std::process::exit(0)
             }
             Ok(ForkResult::Parent { child, .. }) => {
+                info!("outer fork child pid: {}", child);
                 waitpid(child, None)?;
                 Ok(())
             }
@@ -557,6 +628,7 @@ impl Container {
         //     }
         // }
     }
+
 
     pub fn delete(&self,) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting container '{}'...", &self.id);

@@ -1,3 +1,11 @@
+use std::fs::File;
+use std::path::Path;
+use std::ffi::CString;
+use std::os::unix::io::AsRawFd;
+use std::collections::HashMap;
+use nix::sys::wait::waitpid;
+use nix::unistd::{fork, ForkResult, execve};
+use nix::sched::{CloneFlags, setns};
 use clap::ArgMatches;
 
 use log::info;
@@ -59,6 +67,80 @@ impl<'a> ContainerManager<'a> {
         };
 
         container.run()
+    }
+
+    fn set_namespace(&self, fd: &str, flag: CloneFlags) -> Result<(), Box<dyn std::error::Error>> {
+        if !Path::new(fd).exists() {
+            Ok(())
+        } else {
+            if let Err(e) = setns(File::open(fd).unwrap().as_raw_fd(), flag) {
+                info!("error setting namespace {} - {:?}: {}", fd, flag, e);
+                Ok(())
+            } else {
+                Ok(())
+            }
+        }
+    }
+    fn do_exec(&self, cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
+        info!("preparing command execution...");
+
+        let args = &[Path::new(cmd).file_stem().unwrap().to_str().unwrap()];
+        let envs = &[
+            "PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin",
+            "TERM=xterm-256color",
+            "LC_ALL=C"
+        ];
+        let p = CString::new(cmd).unwrap();
+
+        let a: Vec<CString> = args.iter()
+            .map(|s| CString::new(s.to_string()).unwrap_or_default())
+            .collect();
+        let e: Vec<CString> = envs.iter()
+            .map(|s| CString::new(s.to_string()).unwrap_or_default())
+            .collect();
+
+        info!("executing command...");
+        info!("arguments: \n{:?}\n{:?}\n{:?}",
+            args, envs, p);
+        execve(&p, &a, &e)?;
+
+        Ok(())
+    }
+    pub fn open(&self, container_pid: &str) -> Result<(), Box<dyn std::error::Error>> {
+        info!("opening container...");
+        // let pid = unistd::Pid::from_raw(container_pid.parse::<i32>().unwrap());
+
+        let mut namespaces = HashMap::new();
+        namespaces.insert(CloneFlags::CLONE_NEWIPC, "ipc");
+        namespaces.insert(CloneFlags::CLONE_NEWUTS, "uts");
+        namespaces.insert(CloneFlags::CLONE_NEWNET, "net");
+        namespaces.insert(CloneFlags::CLONE_NEWPID, "pid");
+        namespaces.insert(CloneFlags::CLONE_NEWNS, "mnt");
+        namespaces.insert(CloneFlags::CLONE_NEWCGROUP, "cgroup");
+        namespaces.insert(CloneFlags::CLONE_NEWUSER, "user");
+
+        let pid_path = format!("/proc/{}/ns", container_pid);
+        for namespace in namespaces {
+            let ns_path = format!("{}/{}", pid_path, namespace.1);
+            self.set_namespace(ns_path.as_str(), namespace.0)?;
+        }
+
+        let result = match fork() {
+            Ok(ForkResult::Parent { child, .. }) => {
+                waitpid(child, None)?;
+                Ok(())
+            }
+            Ok(ForkResult::Child) => {
+                self.do_exec("/bin/sh")
+            }
+            Err(e) => {
+                info!("fork failed: {}", e);
+                Ok(())
+            }
+        };
+
+        info!("container opened successfully...");
+        result
     }
 
     #[allow(dead_code)]
