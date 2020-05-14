@@ -128,3 +128,16 @@ pub fn prepare_directory(rootfs: &str, dir_name: &str, perms: Mode) -> Result<()
 
     Ok(())
 }
+
+#[allow(dead_code)]
+pub fn print_caps() {
+    let output = std::process::Command::new("/usr/sbin/capsh")
+            .arg("--print")
+            // .arg("| grep Current")
+            .output();
+    if let Err(e) = output {
+        info!("error printing capabilities: {}", e);
+    } else {
+        info!("capabilities: \n{}", String::from_utf8_lossy(&output.unwrap().stdout));
+    }
+}

@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::os::unix;
 use std::ffi::CString;
+use std::env;
 use nix::mount::{mount, MntFlags, MsFlags, umount, umount2};
 use nix::sched::{CloneFlags, unshare};
 use nix::sys::stat::{Mode};
@@ -19,6 +20,8 @@ use crate::image::Image;
 use crate::utils;
 use crate::networking;
 use crate::spec::Spec;
+use crate::spec::Namespace;
+use crate::spec::NamespaceType;
 
 
 
@@ -197,12 +200,21 @@ impl Container {
     fn prepare_container_mountpoint(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing container mountpoint...");
 
-        let clone_flags =
-            CloneFlags::CLONE_NEWPID |
-            CloneFlags::CLONE_NEWNS |
-            CloneFlags::CLONE_NEWUTS |
-            CloneFlags::CLONE_NEWIPC |
-            CloneFlags::CLONE_NEWUSER;
+        // TODO: Process network ns too
+        let mut clone_flags = CloneFlags::empty();
+        let namespaces: &Vec<Namespace> = &self.spec.linux.as_ref().unwrap().namespaces;
+        for ns in namespaces {
+            match ns.typ {
+                NamespaceType::pid    => clone_flags |= CloneFlags::CLONE_NEWPID,
+                NamespaceType::mount  => clone_flags |= CloneFlags::CLONE_NEWNS,
+                NamespaceType::uts    => clone_flags |= CloneFlags::CLONE_NEWUTS,
+                NamespaceType::ipc    => clone_flags |= CloneFlags::CLONE_NEWIPC,
+                NamespaceType::user   => clone_flags |= CloneFlags::CLONE_NEWUSER,
+                NamespaceType::cgroup => clone_flags |= CloneFlags::CLONE_NEWCGROUP,
+                _ => {}
+            }
+        }
+
         info!("unsharing parent namespaces...");
         unshare(clone_flags)?;
 
@@ -417,18 +429,31 @@ impl Container {
         info!("container directories mounted successfully...");
         Ok(())
     }
-    fn prepare_container_ids(&self) -> Result<(), Box<dyn std::error::Error>> {
-        info!("preparing container ids...");
+    fn prepare_container_id_maps(&self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("preparing container id maps...");
+        // let newuid = 3333;
+        // let newuid = 1000;
+        // let newuid = 0;
+        let newuid = self.spec.process.user.uid;
+        // let uid = unistd::getuid();
+        let uid = 0;
+        // let newgid = 3333;
+        // let newgid = 1000;
+        // let newgid = 0;
+        let newgid = self.spec.process.user.gid;
+        // let gid = unistd::getgid();
+        let gid = 0;
+
+        // let setgroups_path = Path::new("/proc/self/setgroups");
+        // if setgroups_path.exists() {
+        //     fs::remove_file(setgroups_path)?;
+        // }
 
         info!("uid: {} - euid: {}", Uid::current(), Uid::effective());
         info!("gid: {} - egid: {}", Gid::current(), Gid::effective());
 
-        // let newuid = 3333;
-        // let newuid = 1000;
-        let newuid = 0;
-        // let uid = unistd::getuid();
-        let uid = 0;
         let buf = format!("{} {} 1\n", newuid, uid);
+        // let buf2 = format!("{} {} 1\n", newuid, 65534);
         let fd = open("/proc/self/uid_map", OFlag::O_WRONLY, Mode::empty())?;
         info!("writing 'uid_map'");
         write(fd, buf.as_bytes())?;
@@ -439,23 +464,44 @@ impl Container {
         write(fd, "deny".as_bytes())?;
         close(fd)?;
 
-        // let newgid = 3333;
-        // let newgid = 1000;
-        let newgid = 0;
-        // let gid = unistd::getgid();
-        let gid = 0;
         let buf = format!("{} {} 1\n", newgid, gid);
         let fd = open("/proc/self/gid_map", OFlag::O_WRONLY, Mode::empty())?;
         info!("writing 'gid_map' (could fail)");
         write(fd, buf.as_bytes())?;
         close(fd)?;
 
-        // info!("setting ids");
-        // let root_uid = unistd::Uid::from_raw(newuid);
-        // let root_gid = unistd::Gid::from_raw(newgid);
-        // unistd::setresuid(root_uid, root_uid, root_uid)?;
-        // unistd::setresgid(root_gid, root_gid, root_gid)?;
+        // info!("setting groups...");
+        // let gids: Vec<Gid> = self.spec.process.user.additional_gids.iter()
+        //     .map(|gid| Gid::from_raw(*gid as u32))
+        //     .collect();
+        // setgroups(gids.as_slice())?;
 
+        info!("container id maps prepared successfully");
+        Ok(())
+    }
+    fn prepare_container_ids(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if let Err(e) = prctl::set_keep_capabilities(true) {
+            info!("failed to set keep capabilities to true: {}", e);
+            return Ok(())
+        };
+
+        let newuid = self.spec.process.user.uid;
+        let newgid = self.spec.process.user.gid;
+
+
+        info!("setting ids...");
+        let root_uid = Uid::from_raw(newuid as u32);
+        let root_gid = Gid::from_raw(newgid as u32);
+        setresuid(root_uid, root_uid, root_uid)?;
+        setresgid(root_gid, root_gid, root_gid)?;
+
+        info!("uid: {} - euid: {}", Uid::current(), Uid::effective());
+        info!("gid: {} - egid: {}", Gid::current(), Gid::effective());
+
+        if let Err(e) = prctl::set_keep_capabilities(false) {
+            info!("failed to set keep capabilities to false: {}", e);
+            return Ok(())
+        };
         Ok(())
     }
     fn pivot_container_root(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -486,7 +532,13 @@ impl Container {
                 self.remount_container_directories()?;
 
                 sethostname(self.spec.hostname.as_str())?;
-                self.do_exec("/bin/sh")?;
+
+                if let Err(e) = self.prepare_container_ids() {
+                    info!("failed: {}", e);
+                }
+
+                self.do_exec()?;
+                // self.do_exec("/bin/sh")?;
                 // self.do_exec("/sbin/init")?;
 
                 // Should not reach
@@ -496,7 +548,6 @@ impl Container {
             Ok(ForkResult::Parent { child, .. }) => {
                 info!("running parent process...");
                 info!("inner fork child pid: {}", child);
-
                 info!("waiting for child...");
                 waitpid(child, None)?;
             }
@@ -532,24 +583,23 @@ impl Container {
             Some("/"),
             "/",
             None::<&str>,
-            MsFlags::MS_BIND | MsFlags::MS_RDONLY | MsFlags::MS_NOSUID | MsFlags::MS_REMOUNT,
+            MsFlags::MS_BIND | MsFlags::MS_NOSUID | MsFlags::MS_REMOUNT,
             None::<&str>,
         )?;
 
         info!("container directories remounted successfully...");
         Ok(())
     }
-    fn do_exec(&self, cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn do_exec(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing command execution...");
 
-        let args = &[Path::new(cmd).file_stem().unwrap().to_str().unwrap()];
-        let envs = &[
-            "PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin",
-            "TERM=xterm-256color",
-            "LC_ALL=C"
-        ];
-        let p = CString::new(cmd).unwrap();
+        let process = &self.spec.process;
 
+        let path = &process.args[0];
+        let args = &process.args;
+        let envs = &process.env;
+
+        let p: CString = CString::new(path.as_str()).unwrap();
         let a: Vec<CString> = args.iter()
             .map(|s| CString::new(s.to_string()).unwrap_or_default())
             .collect();
@@ -557,10 +607,20 @@ impl Container {
             .map(|s| CString::new(s.to_string()).unwrap_or_default())
             .collect();
 
+        info!("setting environment variables...");
+        for env in envs {
+            let e: Vec<&str> = env.split("=").collect();
+            let variable = e[0];
+            let value = e[1];
+
+            env::remove_var(variable);
+            env::set_var(variable, value);
+        }
+
         info!("executing command...");
         info!("arguments: \n{:?}\n{:?}\n{:?}",
-            args, envs, p);
-        execve(&p, &a, &e)?;
+            p, a, e);
+        execvpe(&p, &a, &e)?;
 
         Ok(())
     }
@@ -584,7 +644,10 @@ impl Container {
         Ok(())
     }
     fn clean_run(&self) -> Result<(), Box<dyn std::error::Error>> {
+
         self.mount_container_filesystem()?;
+
+        // self.prepare_container_ids()?;
 
         self.prepare_container_mountpoint()?;
 
@@ -594,7 +657,7 @@ impl Container {
 
         self.mount_container_directories()?;
 
-        self.prepare_container_ids()?;
+        self.prepare_container_id_maps()?;
 
         self.pivot_container_root()?;
 
