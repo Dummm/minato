@@ -18,6 +18,7 @@ use log::info;
 use crate::image::Image;
 use crate::utils;
 use crate::networking;
+use crate::spec::Spec;
 
 
 
@@ -33,7 +34,8 @@ use crate::networking;
 pub struct Container {
     pub id: String,
     pub image: Option<Image>,
-    pub path: String
+    pub path: String,
+    pub spec: Spec,
     // pub state: State,
 }
 // TODO: Add methods for container paths
@@ -51,17 +53,26 @@ impl Container {
         };
         let path = utils::get_container_path_with_str(id.as_str()).unwrap();
         // let path = String::from();
+        let spec = Spec::new().unwrap();
 
         Container {
             id,
             image,
-            path
+            path,
+            spec,
             // state: State::Stopped,
         }
     }
 
-    // TODO: Generate config.json file
     fn generate_config_json(&self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("creating config json...");
+
+        // let spec = Spec::new()?;
+        // spec.save(&self.path)?;
+        let spec_path = format!("{}/config.json", &self.path);
+        self.spec.save(spec_path.as_str())?;
+
+        info!("config json created successfully");
         Ok(())
     }
     fn create_directory_structure(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -87,16 +98,17 @@ impl Container {
 
         Ok(())
     }
+    // TODO: Add custom config.json
     pub fn create(&self) -> Result<(), Box<dyn std::error::Error>> {
-        info!("creating container '{}'...", &self.id);
+        info!("creating container '{}, {}, {:?}'...", &self.id, &self.path, &self.spec);
 
         if Path::new(&self.path).exists() {
             info!("container exists. skipping creation...");
             return Ok(())
         }
 
-        self.generate_config_json()?;
         self.create_directory_structure()?;
+        self.generate_config_json()?;
 
         info!("container created successfully");
         Ok(())
@@ -133,6 +145,9 @@ impl Container {
             None        => return Ok(None)
         };
         container.image = Some(image);
+
+        let spec_path = format!("{}/config.json", container.path);
+        container.spec = Spec::load(spec_path.as_str())?;
 
         Ok(Some(container))
     }
@@ -470,7 +485,7 @@ impl Container {
 
                 self.remount_container_directories()?;
 
-                sethostname("test")?;
+                sethostname(self.spec.hostname.as_str())?;
                 self.do_exec("/bin/sh")?;
                 // self.do_exec("/sbin/init")?;
 

@@ -1,27 +1,56 @@
 #![allow(non_camel_case_types)]
+use std::path::Path;
 use std::collections::HashMap;
-use failure::Error;
-use serde_json::from_reader;
+// use failure::Error;
+use serde_json;
 use std::fs::File;
 use std::io::BufReader;
 
+fn is_false(b: &bool) -> bool {
+    !b
+}
+
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Spec {
-    #[serde(default, rename = "ociVersion")]
+    #[serde(default, rename = "ociVersion", skip_serializing_if = "String::is_empty")]
     pub oci_version: String,
-    pub root: Root,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub mounts: Vec<Mount>,
     pub process: Process,
+    pub root: Root,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub hostname: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub linux: Option<Linux>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mounts: Vec<Mount>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hooks: Option<Hooks>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub linux: Option<Linux>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub annotations: HashMap<String, String>,
 }
+impl Spec {
+    pub fn new() -> Result<Spec, Box<dyn std::error::Error>> {
+        let spec = Spec::load("config.json")?;
+        Ok(spec)
+    }
+
+    pub fn load(path: &str) -> Result<Spec, Box<dyn std::error::Error>> {
+        if !Path::new(path).exists() {
+            Spec::load("config.json")?;
+        }
+        let file = File::open(path)?;
+        let buf_reader = BufReader::new(file);
+        let spec: Spec = serde_json::from_reader(buf_reader)?;
+        Ok(spec)
+    }
+
+    pub fn save(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let mut file = File::create(path)?;
+        serde_json::to_writer(&mut file, &self)?;
+        Ok(())
+    }
+}
+
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Root {
@@ -45,29 +74,29 @@ pub struct Mount {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Process {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_false")]
     pub terminal: bool,
     #[serde(default, rename = "consoleSize")]
     pub console_size: ConsoleSize,
+    pub user: User,
     #[serde(default)]
-    pub cwd: String,
+    pub args: Vec<String>,
     #[serde(default)]
     pub env: Vec<String>,
     #[serde(default)]
-    pub args: Vec<String>,
+    pub cwd: String,
+    #[serde(default)]
+    pub capabilities: Option<Capability>,
     #[serde(default)]
     pub rlimits: Vec<Rlimit>,
     #[serde(default, rename = "apparmorProfile")]
     pub apparmor_profile: String,
-    #[serde(default)]
-    pub capabilities: Vec<Capability>,
     #[serde(default, rename = "noNewPrivileges")]
     pub no_new_privileges: bool,
     #[serde(default, rename = "oomScoreAdj")]
     pub oom_score_adj: i64,
     #[serde(default, rename = "selinuxLabel")]
     pub selinux_label: String,
-    pub user: User,
 }
 
 #[derive(Default, PartialEq, Serialize, Deserialize, Debug)]
@@ -293,7 +322,9 @@ pub struct CpuCgroup {
     pub quota: i64,
     #[serde(default)]
     pub period: u64,
+    #[serde(default, rename = "realtimeRuntime")]
     pub realtime_runtime: i64,
+    #[serde(default, rename = "realtimePeriod")]
     pub realtime_period: u64,
     #[serde(default)]
     pub cpus: String,
@@ -387,13 +418,4 @@ pub struct Hook {
     pub env: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<i64>,
-}
-
-impl Spec {
-    pub fn load() -> Result<Spec, Error> {
-        let file = File::open("config.json")?;
-        let buf_reader = BufReader::new(file);
-        let spec: Spec = from_reader(buf_reader)?;
-        Ok(spec)
-    }
 }

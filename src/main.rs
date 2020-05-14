@@ -5,6 +5,10 @@ use regex::Regex;
 extern crate structopt;
 use structopt::{StructOpt, clap::crate_name};
 use log::info;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
+extern crate serde;
 
 mod image;
 mod image_manager;
@@ -14,6 +18,7 @@ mod utils;
 mod networking;
 mod daemon;
 mod client;
+mod spec;
 
 
 #[derive(Debug, StructOpt)]
@@ -223,8 +228,6 @@ impl FromStr for ContainerAction {
 
 
 // TODO: Manage project
-// TODO: Modularize project
-// TODO: Switch overlay mounting method if root is required
 // TODO: Try archivemount instead of unarchiving layers
 // TODO: Work on the spec files for the config.json
 // TODO: Use config.json to store container run info
@@ -232,12 +235,12 @@ impl FromStr for ContainerAction {
 // TODO: Fix unwraps so it doesn't panic
 // TODO: Cgroups
 // TODO: Fix networking
-// TODO: User namespace (uid, gid, subuid, subgid)
 // TODO: Safe daemon closing
 // TODO: Manage input and output from daemon
 // TODO: Add function end comment
-// TODO: Add ttys to new version
-// TODO: Refactorize code
+// TODO: Populate 'sys' and 'dev' instead of mounting them from parent (maybe remove target)
+// TODO: Check if 'index=on' is needed when mounting overlayfs
+// TODO: Pull containers from LXC repository
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     env_logger::builder()
@@ -247,6 +250,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let opt = Opt::from_args();
     // println!("{:?}", opt);
+
+    // println!("{:?}", spec::Spec::load("src/config.json")?);
+
     if opt.daemon {
         info!("running in daemon mode");
 
