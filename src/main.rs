@@ -176,10 +176,18 @@ enum ContainerAction {
 
     #[structopt(name = "open", about = "Open a container")]
     Open {
-        #[structopt(name = "container-pid",
-            about = "Container pid",
-            short = "p", long = "container-pid")]
-        container_pid: String,
+        #[structopt(name = "container-name",
+            about = "Container name",
+            short = "c", long = "container-name")]
+        container_name: String,
+    },
+
+    #[structopt(name = "stop", about = "Stop a container")]
+    Stop {
+        #[structopt(name = "container-name",
+            about = "Container name",
+            short = "c", long = "container-name")]
+        container_name: String,
     },
 
     #[structopt(name = "delete", about = "Delete a container")]
@@ -226,21 +234,22 @@ impl FromStr for ContainerAction {
 }
 
 
-
-// TODO: Manage project
-// TODO: Try archivemount instead of unarchiving layers
-// TODO: Work on the spec files for the config.json
-// TODO: Use config.json to store container run info
-// TODO: Change back names from c's to n'suse std::nix::net::UnixStream;
-// TODO: Fix unwraps so it doesn't panic
-// TODO: Cgroups
-// TODO: Fix networking
-// TODO: Safe daemon closing
+// TODO: DOCUMANTATIE
+// TODO: Safe daemon closing + closing option
 // TODO: Manage input and output from daemon
+// TODO: Open container by name
+// TODO: Add states and use them
+// TODO: Try to add UI
 // TODO: Add function end comment
 // TODO: Populate 'sys' and 'dev' instead of mounting them from parent (maybe remove target)
-// TODO: Check if 'index=on' is needed when mounting overlayfs
 // TODO: Pull containers from LXC repository
+// TODO: Check if 'index=on' is needed when mounting overlayfs
+// TODO: Cgroups + other spec configs
+// TODO: Fix networking
+// TODO: Fix unwraps so it doesn't panic
+// TODO: Change back names from c's to n'suse std::nix::net::UnixStream;
+// TODO: Manage project
+// TODO: Try archivemount instead of unarchiving layers
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     env_logger::builder()

@@ -3,13 +3,14 @@ use std::path::Path;
 use std::ffi::CString;
 use std::os::unix::io::AsRawFd;
 use std::collections::HashMap;
-use nix::sys::wait::waitpid;
-use nix::unistd::{fork, ForkResult, execve};
+use nix::sys::{wait::waitpid, signal::kill, signal::Signal};
+use nix::unistd::{fork, ForkResult, execve, Pid};
 use nix::sched::{CloneFlags, setns};
 use clap::ArgMatches;
 
 use log::info;
 
+use crate::utils;
 use crate::image::Image;
 use crate::container::Container;
 
@@ -106,9 +107,18 @@ impl<'a> ContainerManager<'a> {
 
         Ok(())
     }
-    pub fn open(&self, container_pid: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn open(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("opening container...");
         // let pid = unistd::Pid::from_raw(container_pid.parse::<i32>().unwrap());
+
+        let container_pid = match utils::get_container_pid_with_str(container_name).unwrap() {
+            None => {
+                info!("container isn't running or doesn't exist. skipping...");
+                return Ok(());
+            },
+            Some(pid) => pid
+        };
+        info!("container pid: {}", container_pid);
 
         let mut namespaces = HashMap::new();
         namespaces.insert(CloneFlags::CLONE_NEWIPC, "ipc");
@@ -141,6 +151,26 @@ impl<'a> ContainerManager<'a> {
 
         info!("container opened successfully...");
         result
+    }
+
+    pub fn stop(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+        info!("stopping container...");
+
+        let pid = match utils::get_container_pid_with_str(container_name).unwrap() {
+            None => {
+                info!("container isn't running or doesn't exist. skipping...");
+                return Ok(());
+            },
+            Some(pid) => pid
+        };
+        info!("container pid: {}", pid);
+
+        info!("killing process...");
+        let pid_int: i32 = pid.parse()?;
+        kill(Pid::from_raw(pid_int), Signal::SIGTERM)?;
+
+        info!("container stopped successfully");
+        Ok(())
     }
 
     #[allow(dead_code)]

@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::fs::read_to_string;
 use std::str::FromStr;
 use nix::sys::stat::{Mode};
 use nix::unistd::{mkdir};
@@ -28,7 +29,8 @@ pub fn run_command(opt: Opt, image_manager: &ImageManager, container_manager: &C
         Some(Subcommand::Container  { action }) => match action {
             ContainerAction::Create { container_name, image_id } => container_manager.create(&container_name, &image_id),
             ContainerAction::Run    { container_name }           => container_manager.run(&container_name),
-            ContainerAction::Open   { container_pid }            => container_manager.open(&container_pid),
+            ContainerAction::Open   { container_name }           => container_manager.open(&container_name),
+            ContainerAction::Stop   { container_name }           => container_manager.stop(&container_name),
             ContainerAction::Delete { container_name }           => container_manager.delete(&container_name),
         }
         None => {
@@ -107,8 +109,24 @@ pub fn get_container_path_with_str(container_id: &str) -> Result<String, Box<dyn
         home.display(), container_id
     ))
 }
-
 pub fn get_container_path(container: &Container) -> Result<String, Box<dyn std::error::Error>> {
+    get_container_path_with_str(container.id.as_str())
+}
+
+pub fn get_container_pid_with_str(container_id: &str) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let container_path = utils::get_container_path_with_str(container_id)?;
+
+    let pid_path = format!("{}/pid", container_path);
+    if !Path::new(&pid_path).exists() {
+        return Ok(None);
+    }
+
+    let pid = read_to_string(pid_path)?;
+
+    Ok(Some(pid.replace('\n', "")))
+}
+#[allow(dead_code)]
+pub fn get_container_pid(container: &Container) -> Result<String, Box<dyn std::error::Error>> {
     get_container_path_with_str(container.id.as_str())
 }
 

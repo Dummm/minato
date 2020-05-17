@@ -6,7 +6,8 @@ use std::ffi::CString;
 use std::env;
 use nix::mount::{mount, MntFlags, MsFlags, umount, umount2};
 use nix::sched::{CloneFlags, unshare};
-use nix::sys::stat::{Mode};
+use nix::sys::stat::Mode;
+// use nix::sys::stat::{Mode, makedev, mknod, SFlag};
 use nix::sys::wait::waitpid;
 use nix::unistd::*;
 use nix::fcntl::{open, OFlag};
@@ -24,14 +25,6 @@ use crate::spec::Namespace;
 use crate::spec::NamespaceType;
 
 
-
-// #[derive(Debug, PartialEq)]
-// pub enum State {
-//     Creating,
-//     Created(u32),
-//     Running(u32),
-//     Stopped,
-// }
 
 // TODO: Save/load container structures in jsons (serde_json)
 pub struct Container {
@@ -244,6 +237,29 @@ impl Container {
         info!("changind directory to container root [{}]...", rootfs);
         chdir(rootfs)?;
 
+
+        // TOOD: Move?
+        let home = match dirs::home_dir() {
+            Some(path) => path,
+            None       => return Err("error getting home directory".into())
+        };
+        let tini_path = format!(
+            "{}/.minato/tini",
+            home.display()
+        );
+        info!("binding init binary to container...");
+        if !Path::new("tini").exists() {
+            fs::File::create("tini")?;
+        }
+        info!("{}", tini_path);
+        mount(
+            Some(tini_path.as_str()),
+            "tini",
+            None::<&str>,
+            MsFlags::MS_BIND | MsFlags::MS_NOSUID | MsFlags::MS_NODEV, // | MsFlags::MS_RDONLY,
+            None::<&str>,
+        )?;
+
         info!("container mountpoint prepared successfully...");
         Ok(())
     }
@@ -396,34 +412,36 @@ impl Container {
         //     Some(Gid::from_raw(0))
         // )?;
 
-        // info!("creating ttys");
-        // for i in 0..7 {
-        //     info!("creating tty{}...", i);
+        // BUG: Init doesn't work
+        // if self.spec.process.args[0] == "init" {
+            // info!("creating ttys");
+            // for i in 0..7 {
+            //     info!("creating tty{}...", i);
 
-        //     let tty_path_str = format!("/dev/tty{}", i);
-        //     let perms =
-        //         Mode::S_IRUSR | Mode::S_IWUSR |
-        //         Mode::S_IRGRP | Mode::S_IWGRP |
-        //         Mode::S_IROTH | Mode::S_IWOTH;
-        //     if Path::new(tty_path_str.clone().as_str()).exists() {
-        //         info!("removing /dev/tty{}...", i);
-        //         fs::remove_file(tty_path_str.clone())?;
-        //     }
-        //     let dev = makedev(4, i);
-        //     info!("dev: {}", dev);
-        //     info!("mknod");
-        //     mknod(
-        //         tty_path_str.clone().as_str(),
-        //         SFlag::S_IFCHR,
-        //         perms,
-        //         dev
-        //     )?;
-        //     info!("chown");
-        //     chown(
-        //         tty_path_str.as_str(),
-        //         Some(Uid::from_raw(0)),
-        //         Some(Gid::from_raw(0))
-        //     )?;
+            //     let tty_path_str = format!("/dev/tty{}", i);
+            //     let perms =
+            //         Mode::S_IRUSR | Mode::S_IWUSR |
+            //         Mode::S_IRGRP | Mode::S_IWGRP |
+            //         Mode::S_IROTH | Mode::S_IWOTH;
+            //     if Path::new(tty_path_str.clone().as_str()).exists() {
+            //         info!("removing /dev/tty{}...", i);
+            //         fs::remove_file(tty_path_str.clone())?;
+            //     }
+            //     let dev = makedev(4, i);
+            //     info!("dev: {}", dev);
+            //     info!("mknod");
+            //     mknod(
+            //         tty_path_str.clone().as_str(),
+            //         SFlag::S_IFCHR,
+            //         perms,
+            //         dev
+            //     )?;
+            //     info!("chown");
+            //     chown(
+            //         tty_path_str.as_str(),
+            //         Some(Uid::from_raw(0)),
+            //         Some(Gid::from_raw(0))
+            //     )?;
         // }
 
         info!("container directories mounted successfully...");
@@ -479,6 +497,7 @@ impl Container {
         info!("container id maps prepared successfully");
         Ok(())
     }
+    #[allow(dead_code)]
     fn prepare_container_ids(&self) -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = prctl::set_keep_capabilities(true) {
             info!("failed to set keep capabilities to true: {}", e);
@@ -527,15 +546,13 @@ impl Container {
             Ok(ForkResult::Child) => {
                 info!("running child process...");
 
-                info!("child pid: {}", getpid());
-
                 self.remount_container_directories()?;
 
                 sethostname(self.spec.hostname.as_str())?;
 
-                if let Err(e) = self.prepare_container_ids() {
-                    info!("failed: {}", e);
-                }
+                // if let Err(e) = self.prepare_container_ids() {
+                //     info!("failed: {}", e);
+                // }
 
                 self.do_exec()?;
                 // self.do_exec("/bin/sh")?;
@@ -547,11 +564,12 @@ impl Container {
             }
             Ok(ForkResult::Parent { child, .. }) => {
                 info!("running parent process...");
+
                 info!("inner fork child pid: {}", child);
+
                 info!("waiting for child...");
                 waitpid(child, None)?;
             }
-
             Err(_) => {}
         };
 
@@ -578,6 +596,7 @@ impl Container {
             std::fs::remove_dir_all("/old_proc")?;
         }
 
+        // TODO: Unsure if st's needed
         info!("mounting remounting container root...");
         mount(
             Some("/"),
@@ -593,11 +612,31 @@ impl Container {
     fn do_exec(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing command execution...");
 
-        let process = &self.spec.process;
+        // let mut tini = vec![String::from("tini")];
 
+        let process = &self.spec.process;
         let path = &process.args[0];
         let args = &process.args;
         let envs = &process.env;
+
+        // let process = &self.spec.process;
+        // let path = if self.spec.process.args[0] == "init" {
+        //     &tini[0]
+        // } else {
+        //     &process.args[0]
+        // };
+        // let args = if self.spec.process.args[0] == "init" {
+        //     &tini
+        // } else {
+        //     &process.args
+        // };
+        // let envs = &process.env;
+
+        // let process = &self.spec.process;
+        // tini.append(&mut process.args.clone());
+        // let path = "tini";
+        // let args = tini;
+        // let envs = &process.env;
 
         let p: CString = CString::new(path.as_str()).unwrap();
         let a: Vec<CString> = args.iter()
@@ -647,8 +686,6 @@ impl Container {
 
         self.mount_container_filesystem()?;
 
-        // self.prepare_container_ids()?;
-
         self.prepare_container_mountpoint()?;
 
         self.prepare_container_directories()?;
@@ -682,11 +719,24 @@ impl Container {
         let result = match fork() {
             Ok(ForkResult::Child) => {
                 self.clean_run()?;
+
                 std::process::exit(0)
             }
             Ok(ForkResult::Parent { child, .. }) => {
                 info!("outer fork child pid: {}", child);
+
+                info!("writing pid to file...");
+                let pid_path = format!("{}/pid", self.path);
+                if Path::new(&pid_path).exists() {
+                    info!("removing pid file...");
+                    fs::remove_file(&pid_path)?;
+                }
+                let pid_str = format!("{}\n\n", child.as_raw().to_string());
+                fs::File::create(&pid_path)?;
+                fs::write(pid_path, pid_str)?;
+
                 waitpid(child, None)?;
+
                 Ok(())
             }
             Err(e) => Err(From::from(e))
@@ -695,6 +745,7 @@ impl Container {
 
         self.cleanup()?;
 
+        info!("container run successful...");
         result
         // match result {
         //     Err(e) => {
@@ -706,7 +757,6 @@ impl Container {
         //     }
         // }
     }
-
 
     pub fn delete(&self,) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting container '{}'...", &self.id);
