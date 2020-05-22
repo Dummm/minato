@@ -13,7 +13,6 @@ use crate::utils;
 
 
 
-// TODO: Save/load container structures in jsons (serde_json)
 pub struct Image {
     pub id: String,
     pub name: String,

@@ -1,5 +1,6 @@
 use std::iter;
 use std::fs;
+// use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::os::unix;
 use std::ffi::CString;
@@ -26,7 +27,6 @@ use crate::spec::NamespaceType;
 
 
 
-// TODO: Save/load container structures in jsons (serde_json)
 pub struct Container {
     pub id: String,
     pub image: Option<Image>,
@@ -34,7 +34,6 @@ pub struct Container {
     pub spec: Spec,
     // pub state: State,
 }
-// TODO: Add methods for container paths
 impl Container {
     pub fn new(container_id: Option<&str>, image: Option<Image>) -> Container {
         let id: String = match container_id {
@@ -94,7 +93,6 @@ impl Container {
 
         Ok(())
     }
-    // TODO: Add custom config.json
     pub fn create(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("creating container '{}, {}, {:?}'...", &self.id, &self.path, &self.spec);
 
@@ -248,17 +246,35 @@ impl Container {
             home.display()
         );
         info!("binding init binary to container...");
-        if !Path::new("tini").exists() {
-            fs::File::create("tini")?;
+        let tini_bin = "sbin/tini";
+        if !Path::new(&tini_bin).exists() {
+            fs::File::create(&tini_bin)?;
+            // fs::remove_file("tini")?;
         }
+        // let f = fs::File::create("tini")?;
+        // let metadata = f.metadata()?;
+        // let mut permissions = metadata.permissions();
+        // permissions.set_mode(0o777);
+        // info!("{:o}", permissions.mode());
+
+        // }
         info!("{}", tini_path);
         mount(
             Some(tini_path.as_str()),
-            "tini",
+            tini_bin,
             None::<&str>,
             MsFlags::MS_BIND | MsFlags::MS_NOSUID | MsFlags::MS_NODEV, // | MsFlags::MS_RDONLY,
             None::<&str>,
         )?;
+        // let f = fs::File::open("tini")?;
+        // let metadata = f.metadata()?;
+        // let mut permissions = metadata.permissions();
+        // permissions.set_mode(0o777);
+        // info!("{:o}", permissions.mode());
+        // chown(
+        //     tini_path.as_str(),
+
+        // )?;
 
         info!("container mountpoint prepared successfully...");
         Ok(())
@@ -364,14 +380,14 @@ impl Container {
             None::<&str>,
         )?;
 
-        info!("mounting sys...");
-        mount(
-            Some("/sys"),
-            "sys",
-            None::<&str>,
-            MsFlags::MS_BIND | MsFlags::MS_REC,
-            None::<&str>,
-        )?;
+        // info!("mounting sys...");
+        // mount(
+        //     Some("/sys"),
+        //     "sys",
+        //     None::<&str>,
+        //     MsFlags::MS_BIND | MsFlags::MS_REC,
+        //     None::<&str>,
+        // )?;
 
         // Slashes?
         info!("mounting dev...");
@@ -539,7 +555,7 @@ impl Container {
         info!("container root pivoted successfully");
         Ok(())
     }
-    fn execute_inner_fork(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn execute_inner_fork(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
         info!("executing inner fork...");
 
         match fork() {
@@ -568,7 +584,10 @@ impl Container {
                 info!("inner fork child pid: {}", child);
 
                 info!("waiting for child...");
-                waitpid(child, None)?;
+
+                if !daemon {
+                    waitpid(child, None)?;
+                }
             }
             Err(_) => {}
         };
@@ -596,7 +615,7 @@ impl Container {
             std::fs::remove_dir_all("/old_proc")?;
         }
 
-        // TODO: Unsure if st's needed
+        // BUG: Unsure if it's needed
         info!("mounting remounting container root...");
         mount(
             Some("/"),
@@ -612,12 +631,12 @@ impl Container {
     fn do_exec(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing command execution...");
 
-        // let mut tini = vec![String::from("tini")];
+        let mut tini = vec![String::from("tini")];
 
-        let process = &self.spec.process;
-        let path = &process.args[0];
-        let args = &process.args;
-        let envs = &process.env;
+        // let process = &self.spec.process;
+        // let path = &process.args[0];
+        // let args = &process.args;
+        // let envs = &process.env;
 
         // let process = &self.spec.process;
         // let path = if self.spec.process.args[0] == "init" {
@@ -632,13 +651,13 @@ impl Container {
         // };
         // let envs = &process.env;
 
-        // let process = &self.spec.process;
-        // tini.append(&mut process.args.clone());
-        // let path = "tini";
-        // let args = tini;
-        // let envs = &process.env;
+        let process = &self.spec.process;
+        tini.append(&mut process.args.clone());
+        let path = "tini";
+        let args = tini;
+        let envs = &process.env;
 
-        let p: CString = CString::new(path.as_str()).unwrap();
+        let p: CString = CString::new(path).unwrap();
         let a: Vec<CString> = args.iter()
             .map(|s| CString::new(s.to_string()).unwrap_or_default())
             .collect();
@@ -679,12 +698,20 @@ impl Container {
         // chdir("/")?;
         self.unmount_container_filesystem()?;
 
+        let pid_path = format!("{}/pid", self.path);
+        if Path::new(&pid_path).exists() {
+            info!("removing pid file...");
+            fs::remove_file(&pid_path)?;
+        }
+
         info!("cleanup successful");
         Ok(())
     }
-    fn clean_run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn clean_run(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
 
         self.mount_container_filesystem()?;
+
+        self.prepare_cgroups()?;
 
         self.prepare_container_mountpoint()?;
 
@@ -698,7 +725,7 @@ impl Container {
 
         self.pivot_container_root()?;
 
-        self.execute_inner_fork()?;
+        self.execute_inner_fork(daemon)?;
 
         // TODO: Move code where it belongs(???)
         // if true {
@@ -712,30 +739,47 @@ impl Container {
 
         Ok(())
     }
-    pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn prepare_cgroups(&self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("preparing cgroups...");
+
+        let cgroup_path = format!("{}/merged/sys/fs/cgroup", self.path);
+        if Path::new(&cgroup_path).exists() {
+            info!("removing cgroup folder...");
+            fs::remove_dir_all(&cgroup_path)?;
+        }
+        fs::create_dir_all(&cgroup_path)?;
+
+        // TODO: Do something ffs
+
+        info!("cgroups prepared successfully");
+        Ok(())
+    }
+    pub fn run(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
         info!("running container...");
 
         info!("executing outer fork...");
         let result = match fork() {
             Ok(ForkResult::Child) => {
-                self.clean_run()?;
+                self.clean_run(daemon)
 
-                std::process::exit(0)
+                // std::process::exit(0)
             }
             Ok(ForkResult::Parent { child, .. }) => {
                 info!("outer fork child pid: {}", child);
 
-                info!("writing pid to file...");
+                info!("writing pid file...");
                 let pid_path = format!("{}/pid", self.path);
                 if Path::new(&pid_path).exists() {
                     info!("removing pid file...");
                     fs::remove_file(&pid_path)?;
                 }
-                let pid_str = format!("{}\n\n", child.as_raw().to_string());
+                let pid_str = format!("{}\n", child.as_raw().to_string());
                 fs::File::create(&pid_path)?;
                 fs::write(pid_path, pid_str)?;
 
-                waitpid(child, None)?;
+                if !daemon {
+                    waitpid(child, None)?;
+                }
 
                 Ok(())
             }

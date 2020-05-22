@@ -6,6 +6,9 @@ use std::os::unix::net::{UnixStream, UnixListener};
 use std::io::prelude::*;
 use std::fs;
 use std::str::FromStr;
+use nix::unistd::getpid;
+use std::error::Error;
+use std::fmt;
 
 use log::info;
 
@@ -13,6 +16,15 @@ use crate::utils;
 use crate::image_manager::ImageManager;
 use crate::container_manager::ContainerManager;
 use crate::Opt;
+
+#[derive(Debug)]
+struct ExitError(String);
+impl Error for ExitError {}
+impl fmt::Display for ExitError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "There is an error: {}", self.0)
+    }
+}
 
 
 pub struct Daemon<'a> {
@@ -69,12 +81,33 @@ impl<'a> Daemon<'a> {
     pub fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("starting daemon...");
 
+        let home = match dirs::home_dir() {
+            Some(path) => path,
+            None       => return Err("error getting home directory".into())
+        };
+
+        let pid_path = format!("{}/.minato/pid", home.display());
+        if Path::new(&pid_path).exists() {
+            info!("removing pid file...");
+            fs::remove_file(&pid_path)?;
+        }
+        let pid_str = format!("{}\n", getpid().as_raw().to_string());
+        fs::File::create(&pid_path)?;
+        fs::write(&pid_path, pid_str)?;
+
         info!("waiting for client...");
         for stream in self.listener.incoming() {
             match stream {
                 Ok(stream) => {
                     info!("client found....");
-                    self.handle_client(stream)?;
+
+                    match self.handle_client(stream) {
+                        Ok(_) => {},
+                        Err(_) =>  {
+                            info!("stopping daemon...");
+                            break;
+                        }
+                    };
                 }
                 Err(err) => {
                     info!("error encountered: {}", err);
@@ -82,6 +115,11 @@ impl<'a> Daemon<'a> {
                     break;
                 }
             }
+        }
+
+        if Path::new(&pid_path).exists() {
+            info!("removing pid file...");
+            fs::remove_file(&pid_path)?;
         }
 
         Ok(())
@@ -105,6 +143,11 @@ impl<'a> Daemon<'a> {
 
         let opt = Opt::from_str(message.as_str())?;
         info!("opt: {:?}", opt);
+
+        if opt.exit {
+            return Err(Box::new(ExitError("close daemon".into())));
+        }
+
         info!("executing command ...");
         utils::run_command(opt, &self.image_manager, &self.container_manager)?;
 

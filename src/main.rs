@@ -26,6 +26,8 @@ mod spec;
 pub struct Opt {
     #[structopt(short, long)]
     daemon: bool,
+    #[structopt(short, long)]
+    exit: bool,
 
     #[structopt(short = "D", long)]
     debug: bool,
@@ -45,19 +47,26 @@ impl FromStr for Opt {
     type Err = std::string::ParseError;
 
     fn from_str(opt_str: &str) ->  Result<Self, Self::Err> {
-        let regex_str = r####"(?:Opt \{ daemon: )(true|false)(?:, debug: )(true|false)(?:, log_level: ")([A-Za-z]+\w)(?:", subcommand: )(None|.+)(?: \})"####;
+        let regex_str = r####"(?:Opt \{ daemon: )(true|false)(?:, exit: )(true|false)(?:, debug: )(true|false)(?:, log_level: ")([A-Za-z]+\w)(?:", subcommand: )(None|.+)(?: \})"####;
         let regex = Regex::new(regex_str).unwrap();
         let matches = regex.captures(opt_str).unwrap();
-        let daemon = matches.get(1).map_or("", |m| m.as_str());
-        let debug = matches.get(2).map_or("", |m| m.as_str());
-        let log_level = matches.get(3).map_or("", |m| m.as_str());
-        let subcommand = matches.get(4).map_or("", |m| m.as_str());
+        let daemon     = matches.get(1).map_or("", |m| m.as_str());
+        let exit       = matches.get(2).map_or("", |m| m.as_str());
+        let debug      = matches.get(3).map_or("", |m| m.as_str());
+        let log_level  = matches.get(4).map_or("", |m| m.as_str());
+        let subcommand = matches.get(5).map_or("", |m| m.as_str());
+
+        let subcommand_conv = match Subcommand::from_str(subcommand) {
+            Ok(s) => Some(s),
+            Err(_) => None
+        };
 
         Ok(Opt {
             daemon:     bool::from_str(daemon).unwrap(),
+            exit:       bool::from_str(exit).unwrap(),
             debug:      bool::from_str(debug).unwrap(),
             log_level:  String::from(log_level),
-            subcommand: Some(Subcommand::from_str(subcommand).unwrap())
+            subcommand: subcommand_conv
         })
     }
 }
@@ -80,10 +89,13 @@ impl FromStr for Subcommand {
     type Err = std::io::Error;
 
     fn from_str(opt_str: &str) ->  Result<Self, Self::Err> {
-        let regex_str = r####"(?:Some\()(.+)(?:\))"####;
+        if opt_str == "None" {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, "None"));
+        }
+        let regex_str = r####"((?:Some\()(.+)(?:\))|None)"####;
         let regex = Regex::new(regex_str).unwrap();
         let matches = regex.captures(opt_str).unwrap();
-        let subcommand = matches.get(1).map_or("", |m| m.as_str());
+        let subcommand = matches.get(2).map_or("", |m| m.as_str());
 
         match subcommand.chars().next() {
             Some('I') => Ok(
@@ -235,16 +247,23 @@ impl FromStr for ContainerAction {
 
 
 // TODO: DOCUMANTATIE
-// TODO: Safe daemon closing + closing option
+// TODO: Fix daemon container closing
+/**
+ * Might be because no ttys
+ * Pid waiting is messed up
+ * Might neeed to move a fork on the daemon side
+*/
+// TODO: Remove dev mount and add ttys
+// TODO: Add .minato folder creation
+// TODO: Add tini-static automatic download from github
 // TODO: Manage input and output from daemon
-// TODO: Open container by name
-// TODO: Add states and use them
-// TODO: Try to add UI
-// TODO: Add function end comment
+// TODO: Add container states
+// TODO: Add UI
+// TODO: Add comment to end of function
 // TODO: Populate 'sys' and 'dev' instead of mounting them from parent (maybe remove target)
 // TODO: Pull containers from LXC repository
 // TODO: Check if 'index=on' is needed when mounting overlayfs
-// TODO: Cgroups + other spec configs
+// TODO: Add Cgroups + other spec configs
 // TODO: Fix networking
 // TODO: Fix unwraps so it doesn't panic
 // TODO: Change back names from c's to n'suse std::nix::net::UnixStream;
@@ -264,6 +283,22 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     if opt.daemon {
         info!("running in daemon mode");
+
+        if opt.exit {
+            info!("running as client");
+            match client::Client::new() {
+                Ok(client) => {
+                    let message = format!("{:?}", opt);
+                    client.send(message.as_bytes())?;
+                    return Ok(())
+                },
+                Err(e) => {
+                    info!("client creation failed");
+                    info!("error: {}", e);
+                    exit(1);
+                }
+            }
+        }
 
         match opt.subcommand {
             None => {

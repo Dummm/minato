@@ -35,7 +35,6 @@ impl<'a> ContainerManager<'a> {
         let image = match Image::load(image_id)? {
             Some(image) => image,
             None        => {
-                // TODO: Add verification
                 info!("image not found. exiting...");
                 // info!("image not found. trying to pull image...");
                 // image_manager::pull(image_id)?;
@@ -49,13 +48,12 @@ impl<'a> ContainerManager<'a> {
         container.create()
     }
 
-    // TODO: Fix unwrap here
     #[allow(dead_code)]
-    pub fn run_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run_with_args(&self, args: &ArgMatches, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
         let container_name = args.value_of("container-name").unwrap();
-        self.run(container_name)
+        self.run(container_name, daemon)
     }
-    pub fn run(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run(&self, container_name: &str, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
         info!("running container '{}'...", container_name);
 
         info!("loading container...");
@@ -67,7 +65,14 @@ impl<'a> ContainerManager<'a> {
             }
         };
 
-        container.run()
+        let pid_path = format!("{}/pid", container.path);
+        if Path::new(&pid_path).exists() {
+            info!("container already running. exiting...");
+            return Ok(())
+        }
+
+
+        container.run(daemon)
     }
 
     fn set_namespace(&self, fd: &str, flag: CloneFlags) -> Result<(), Box<dyn std::error::Error>> {
@@ -113,7 +118,7 @@ impl<'a> ContainerManager<'a> {
 
         let container_pid = match utils::get_container_pid_with_str(container_name).unwrap() {
             None => {
-                info!("container isn't running or doesn't exist. skipping...");
+                info!("container isn't running or doesn't exist. exiting...");
                 return Ok(());
             },
             Some(pid) => pid
@@ -158,7 +163,7 @@ impl<'a> ContainerManager<'a> {
 
         let pid = match utils::get_container_pid_with_str(container_name).unwrap() {
             None => {
-                info!("container isn't running or doesn't exist. skipping...");
+                info!("container isn't running or doesn't exist. exiting...");
                 return Ok(());
             },
             Some(pid) => pid
