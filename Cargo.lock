@@ -236,6 +236,11 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "fs_extra"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "fuchsia-cprng"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -504,8 +509,10 @@ dependencies = [
  "dirs 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "flate2 1.0.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fs_extra 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "nix 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nix 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "prctl 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 1.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest 0.10.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -582,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.11.1"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -673,6 +680,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "ppv-lite86"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "prctl"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "libc 0.2.67 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nix 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "proc-macro-error"
@@ -1427,6 +1443,7 @@ dependencies = [
 "checksum fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "2fad85553e09a6f881f739c29f0b00b0f01357c743266d478b68951ce23285f3"
 "checksum foreign-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"
 "checksum foreign-types-shared 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
+"checksum fs_extra 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5f2a4a2034423744d2cc7ca2068453168dcdb82c438419e639a26bd87839c674"
 "checksum fuchsia-cprng 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
 "checksum fuchsia-zircon 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "2e9763c69ebaae630ba35f74888db465e49e259ba1bc0eda7d06f4a067615d82"
 "checksum fuchsia-zircon-sys 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "3dcaa9ae7725d12cdb85b3ad99a434db70b468c09ded17e012d86b5c1010f7a7"
@@ -1464,7 +1481,7 @@ dependencies = [
 "checksum miow 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "8c1f2f3b1cf331de6896aabf6e9d55dca90356cc9960cca7eaaf408a355ae919"
 "checksum native-tls 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)" = "2b0d88c06fe90d5ee94048ba40409ef1d9315d86f6f38c2efdaad4fb50c58b2d"
 "checksum net2 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)" = "42550d9fb7b6684a6d404d9fa7250c2eb2646df731d1c06afc06dcee9e1bcf88"
-"checksum nix 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)" = "becb657d662f1cd2ef38c7ad480ec6b8cf9e96b27adb543e594f9cf0f2e6065c"
+"checksum nix 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4dbdc256eaac2e3bd236d93ad999d3479ef775c863dbda3068c4006a92eec51b"
 "checksum num_cpus 1.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "46203554f085ff89c235cd12f7075f3233af9b11ed7c9e16dfe2560d03313ce6"
 "checksum openssl 0.10.28 (registry+https://github.com/rust-lang/crates.io-index)" = "973293749822d7dd6370d6da1e523b0d1db19f06c459134c658b2a4261378b52"
 "checksum openssl-probe 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "77af24da69f9d9341038eba93a073b1fdaaa1b788221b00a69bce9e762cb32de"
@@ -1476,6 +1493,7 @@ dependencies = [
 "checksum pin-utils 0.1.0-alpha.4 (registry+https://github.com/rust-lang/crates.io-index)" = "5894c618ce612a3fa23881b152b608bafb8c56cfc22f434a3ba3120b40f7b587"
 "checksum pkg-config 0.3.17 (registry+https://github.com/rust-lang/crates.io-index)" = "05da548ad6865900e60eaba7f589cc0783590a92e940c26953ff81ddbab2d677"
 "checksum ppv-lite86 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)" = "74490b50b9fbe561ac330df47c08f3f33073d2d00c150f719147d7c54522fa1b"
+"checksum prctl 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "059a34f111a9dee2ce1ac2826a68b24601c4298cfeb1a587c3cb493d5ab46f52"
 "checksum proc-macro-error 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "98e9e4b82e0ef281812565ea4751049f1bdcdfccda7d3f459f2e138a40c08678"
 "checksum proc-macro-error-attr 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "4f5444ead4e9935abd7f27dc51f7e852a0569ac888096d5ec2499470794e2e53"
 "checksum proc-macro2 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)" = "6c09721c6781493a2a492a96b5a5bf19b65917fe6728884e7c44dd0c60ca3435"

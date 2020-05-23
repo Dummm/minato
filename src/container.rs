@@ -368,6 +368,47 @@ impl Container {
         info!("container networking prepared successfuly...");
         Ok(())
     }
+    fn mount_container_cgroup_hierarchy(&self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("mounting container cgroup hierarchy...");
+
+        let directories = vec![
+            // "unified", // cgroup2
+            // "systemd",
+            "freezer",
+            "hugetlb",
+            "memory",
+            "blkio",
+            "cpuset",
+            "cpu,cpuacct",
+            "devices",
+            "pids",
+            "net_cls,net_prio",
+            "perf_event",
+            "rdma"
+        ];
+
+        for dir in directories {
+            let dir_path = format!("sys/fs/cgroup/{}", dir);
+            if Path::new(&dir_path).exists() {
+                fs::remove_dir_all(&dir_path)?;
+            }
+            fs::create_dir_all(&dir_path)?;
+
+            info!("mounting cgroup {}...", dir);
+            let cgroup_version = "cgroup";
+            mount(
+                Some(cgroup_version),
+                dir_path.as_str(),
+                Some(cgroup_version),
+                MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_NOEXEC,
+                Some(dir),
+            )?;
+        }
+
+
+        info!("container cgroup hierarchy mounted successfully...");
+        Ok(())
+    }
     fn mount_container_directories(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("mounting container directories...");
 
@@ -379,6 +420,8 @@ impl Container {
             MsFlags::MS_BIND | MsFlags::MS_REC,
             None::<&str>,
         )?;
+
+        self.mount_container_cgroup_hierarchy()?;
 
         // info!("mounting sys...");
         // mount(
@@ -711,7 +754,7 @@ impl Container {
 
         self.mount_container_filesystem()?;
 
-        self.prepare_cgroups()?;
+        // self.prepare_cgroups()?;
 
         self.prepare_container_mountpoint()?;
 
