@@ -754,8 +754,6 @@ impl Container {
 
         self.mount_container_filesystem()?;
 
-        // self.prepare_cgroups()?;
-
         self.prepare_container_mountpoint()?;
 
         self.prepare_container_directories()?;
@@ -780,21 +778,6 @@ impl Container {
             networking::delete_network_namespace(&self.id)?;
         }
 
-        Ok(())
-    }
-    fn prepare_cgroups(&self) -> Result<(), Box<dyn std::error::Error>> {
-        info!("preparing cgroups...");
-
-        let cgroup_path = format!("{}/merged/sys/fs/cgroup", self.path);
-        if Path::new(&cgroup_path).exists() {
-            info!("removing cgroup folder...");
-            fs::remove_dir_all(&cgroup_path)?;
-        }
-        fs::create_dir_all(&cgroup_path)?;
-
-        // TODO: Do something ffs
-
-        info!("cgroups prepared successfully");
         Ok(())
     }
     pub fn run(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
