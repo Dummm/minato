@@ -288,10 +288,8 @@ pub struct DeviceCgroup {
     pub allow: bool,
     #[serde(default, rename = "type")]
     pub typ: String,
-    // TODO: Is option required?
     #[serde(skip_serializing_if = "Option::is_none")]
     pub major: Option<i64>,
-    // TODO: Same
     #[serde(skip_serializing_if = "Option::is_none")]
     pub minor: Option<i64>,
     #[serde(default)]

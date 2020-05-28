@@ -6,6 +6,7 @@ use nix::unistd::{mkdir};
 
 use structopt::StructOpt;
 use dirs;
+use log::debug;
 
 use crate::*;
 use crate::image::Image;
@@ -24,6 +25,7 @@ pub fn run_command(opt: Opt, image_manager: &ImageManager, container_manager: &C
     match opt.subcommand {
         Some(Subcommand::Image  { action }) => match action {
             ImageAction::Pull   { image_id } => image_manager.pull(&image_id),
+            ImageAction::List                => image_manager.list(),
             ImageAction::Delete { image_id } => image_manager.delete(&image_id),
         },
         Some(Subcommand::Container  { action }) => match action {
@@ -31,6 +33,7 @@ pub fn run_command(opt: Opt, image_manager: &ImageManager, container_manager: &C
             ContainerAction::Run    { container_name }           => container_manager.run(&container_name, opt.daemon),
             ContainerAction::Open   { container_name }           => container_manager.open(&container_name),
             ContainerAction::Stop   { container_name }           => container_manager.stop(&container_name),
+            ContainerAction::List                                => container_manager.list(),
             ContainerAction::Delete { container_name }           => container_manager.delete(&container_name),
         }
         None => {
@@ -125,9 +128,8 @@ pub fn get_container_pid_with_str(container_id: &str) -> Result<Option<String>, 
 
     Ok(Some(pid.replace('\n', "")))
 }
-#[allow(dead_code)]
-pub fn get_container_pid(container: &Container) -> Result<String, Box<dyn std::error::Error>> {
-    get_container_path_with_str(container.id.as_str())
+pub fn get_container_pid(container: &Container) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    get_container_pid_with_str(container.id.as_str())
 }
 
 pub fn prepare_directory(rootfs: &str, dir_name: &str, perms: Mode) -> Result<(), Box<dyn std::error::Error>> {

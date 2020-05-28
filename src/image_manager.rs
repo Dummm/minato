@@ -1,4 +1,6 @@
-use log::info;
+use std::path::Path;
+
+use log::{info, error};
 extern crate clap;
 use clap::ArgMatches;
 
@@ -21,7 +23,6 @@ impl<'a>  ImageManager<'a> {
         let image_id = args.value_of("image-id").unwrap();
         self.pull(image_id)
     }
-    // TODO: Modularize
     pub fn pull(&self, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("pulling image...");
 
@@ -35,6 +36,58 @@ impl<'a>  ImageManager<'a> {
 
         image.pull()?;
         info!("pulled image.");
+        Ok(())
+    }
+
+    pub fn list(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let home = match dirs::home_dir() {
+            Some(path) => path,
+            None       => return Err("error getting home directory".into())
+        };
+        let images_path = format!("{}/.minato/images/json", home.display());
+        let images_path = Path::new(&images_path);
+        if !images_path.exists() {
+            error!("images path not found. exiting...");
+            return Ok(());
+        };
+
+        // debug!("{}", containers_path.display());
+        let images = images_path.read_dir()?;
+        let images = images
+            .map(|dir|
+                format!("{}",
+                    dir.unwrap()
+                    .path()
+                    .file_name().unwrap()
+                    .to_str().unwrap()))
+            .collect::<Vec<String>>()
+            .clone();
+
+        // debug!("{:?}", images);
+        println!(
+            "{:25} {:25} {:25} {}",
+            "id", "name", "reference", "path");
+        for i in images {
+            let image_name = Path::new(&i).file_stem().unwrap()
+                .to_str().unwrap();
+            let image_name = image_name.replace("_", "/");
+            let image = match Image::load(image_name.as_str()) {
+                Ok(i) => i,
+                Err(e) => {
+                    println!("error: {}", e);
+                    continue
+                }
+            };
+            match image {
+                Some(img) => {
+                    println!(
+                        "{:25} {:25} {:25} {}",
+                        img.id, img.name, img.reference, img.path);
+                },
+                None => continue
+            }
+        }
+
         Ok(())
     }
 

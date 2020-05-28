@@ -97,7 +97,7 @@ impl Container {
     }
     pub fn create(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("creating container");
-        debug!("container fields: {}, {}, {:?}'...", &self.id, &self.path, &self.spec);
+        debug!("container fields: {}, {}'...", &self.id, &self.path);
 
         if Path::new(&self.path).exists() {
             info!("container exists. skipping creation...");

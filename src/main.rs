@@ -126,6 +126,9 @@ enum ImageAction {
         image_id: String,
     },
 
+    #[structopt(name = "list", about = "List pulled images")]
+    List,
+
     #[structopt(name = "delete", about = "Delete an image from local storage")]
     Delete {
         #[structopt(name = "image-id",
@@ -202,6 +205,9 @@ enum ContainerAction {
         container_name: String,
     },
 
+    #[structopt(name = "list", about = "List containers")]
+    List,
+
     #[structopt(name = "delete", about = "Delete a container")]
     Delete {
         #[structopt(name = "container-name",
@@ -276,6 +282,8 @@ impl FromStr for ContainerAction {
  *   * Networking
  *     TODO: Fix networking
  *
+ * * Image
+ *   TODO: Add containers to image listing
  * * Daemon
  *   TODO: Fix daemon container closing
  *     ? Might be because no ttys

@@ -8,7 +8,7 @@ use nix::unistd::{fork, ForkResult, execve, Pid};
 use nix::sched::{CloneFlags, setns};
 use clap::ArgMatches;
 
-use log::info;
+use log::{info, error};
 
 use crate::utils;
 use crate::image::Image;
@@ -181,6 +181,64 @@ impl<'a> ContainerManager<'a> {
         kill(Pid::from_raw(pid_int), Signal::SIGTERM)?;
 
         info!("stopped container.");
+        Ok(())
+    }
+
+    pub fn list(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let home = match dirs::home_dir() {
+            Some(path) => path,
+            None       => return Err("error getting home directory".into())
+        };
+        let containers_path = format!("{}/.minato/containers", home.display());
+        let containers_path = Path::new(&containers_path);
+        if !containers_path.exists() {
+            error!("containers path not found. exiting...");
+            return Ok(());
+        };
+
+        // debug!("{}", containers_path.display());
+        let containers = containers_path.read_dir()?;
+        let containers = containers
+            .map(|dir|
+                format!("{}",
+                    dir.unwrap()
+                    .path()
+                    .file_name().unwrap()
+                    .to_str().unwrap()))
+            .collect::<Vec<String>>()
+            .clone();
+
+        // debug!("{:?}", containers);
+        println!(
+            "{:10} {:30} {:30} {}",
+            "pid", "id", "image", "path");
+        for c in containers {
+            let container = match Container::load(c.as_str()) {
+                Ok(c) => c,
+                Err(e) => {
+                    println!("error: {}", e);
+                    continue
+                }
+            };
+            match container {
+                Some(cont) => {
+                    let image = match &cont.image {
+                        Some(img) => img.id.clone(),
+                        None      => String::from("-")
+                    };
+                    let pid = match utils::get_container_pid(&cont)? {
+                        Some(pid) => pid,
+                        None => String::from("-")
+                    };
+
+                    println!(
+                        "{:10} {:30} {:30} {}",
+                        pid, cont.id, image, cont.path);
+                },
+                None => continue
+            }
+        }
+
         Ok(())
     }
 
