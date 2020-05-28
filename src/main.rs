@@ -4,7 +4,7 @@ use regex::Regex;
 
 extern crate structopt;
 use structopt::{StructOpt, clap::crate_name};
-use log::info;
+use log::{info, error};
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
@@ -256,6 +256,7 @@ impl FromStr for ContainerAction {
  *   TODO: Add comment to end of function
  *   TODO: Change back names from c's to n's
  *   TODO: Manage project
+ *   TODO: Find a use for lib.rs file
  *
  * * Container
  *   TODO: Add container states (more code)
@@ -265,6 +266,7 @@ impl FromStr for ContainerAction {
  *   TODO: Pull containers from LXC repository
  *   * Namespaces
  *     TODO: Unshare user namespace later
+ *     TODO: Set uid and gids in user namespace
  *     TODO: Add namespace checks (i.e. check if userns is unshared)
  *   * CGroups
  *     TODO: Configure cgroups
@@ -353,7 +355,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let image_manager = image_manager::ImageManager::new();
         let container_manager = container_manager::ContainerManager::new();
 
-        utils::run_command(opt, &image_manager, &container_manager)
+        if let Err(e) = utils::run_command(opt, &image_manager, &container_manager) {
+            error!("program exited with error: {}", e);
+        }
+        Ok(())
     }
 
 }

@@ -2,7 +2,7 @@ use std::io::copy;
 use std::fs::{create_dir_all, File, remove_file, remove_dir_all};
 use std::path::Path;
 
-use log::info;
+use log::{debug, info};
 use reqwest;
 use serde_json::{self, Value};
 use tar::Archive;
@@ -74,8 +74,8 @@ impl Image {
             Value::String(t) => t,
             _ => return Err("token retrieval failed".into()),
         };
-        info!("retrieved token successfully");
 
+        info!("retrieved token.");
         Ok(token.clone())
     }
     fn get_image_json(&self, token: &str, manifests_url: &str) -> Result<Value, Box<dyn std::error::Error>> {
@@ -88,6 +88,7 @@ impl Image {
         let response_text = response.text()?;
         let body: Value = serde_json::from_str(response_text.as_str())?;
 
+        info!("retrieved manifests.");
         Ok(body)
     }
     fn write_image_json(&self, body: Value) -> Result<(), Box<dyn std::error::Error>> {
@@ -115,8 +116,9 @@ impl Image {
         let json_path = json_directory_path.join(json_name);
 
         serde_json::to_writer(&File::create(&json_path)?, &body)?;
-        info!("json path: {}", json_path.to_str().unwrap());
+        debug!("json path: {}", json_path.to_str().unwrap());
 
+        info!("written image json");
         Ok(())
     }
     fn extract_layers_from_body(&self, body: Value) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
@@ -126,8 +128,8 @@ impl Image {
             Value::Array(fs_layers) => fs_layers,
             _ => return Err("filesystem layers retrieval failed".into()),
         };
-        info!("extracted fs_layers successfully");
 
+        info!("extracted fs_layers.");
         Ok(fs_layers.clone())
     }
     fn download_layer(&mut self, token: &str, fs_layer: &Value) -> Result<(), Box<dyn std::error::Error>> {
@@ -156,7 +158,6 @@ impl Image {
         } else {
             return Err("blobSum not found".into());
         }
-        info!("downloaded layer successfully");
 
         Ok(())
     }
@@ -187,7 +188,7 @@ impl Image {
             }
 
         }
-        info!("unpacked layers successfully");
+        info!("unpacked layers.");
 
         Ok(())
     }
@@ -211,7 +212,7 @@ impl Image {
             info!("removed archive layer {}", fs_layer);
         }
 
-        info!("cleaned up successfully");
+        info!("cleaned up image directory.");
         Ok(())
     }
     fn pull_from_docker(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -237,14 +238,15 @@ impl Image {
         let number_of_layers = fs_layers.len();
         for (index, fs_layer) in fs_layers.iter().enumerate() {
             info!("downloading layer {} out of {}...", index + 1, number_of_layers);
-            self.download_layer(token.as_str(), &fs_layer).expect("download failed");
+            self.download_layer(token.as_str(), &fs_layer)?;
+            info!("downloaded layer successfully");
         }
 
         self.unpack_image_layers()?;
 
         self.remove_archives()?;
 
-        info!("image pulled successfully...");
+        info!("pulled image from docker repository.");
         Ok(())
     }
     pub fn pull(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -257,6 +259,7 @@ impl Image {
 
         self.pull_from_docker()?;
 
+        info!("pulled image.");
         Ok(())
     }
 
@@ -286,11 +289,10 @@ impl Image {
         }
 
         remove_file(json_path)?;
-        info!("image json deleted succesfully");
 
+        info!("deleted image json.");
         Ok(())
     }
-
     fn delete_image_directory(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting image directory...");
 
@@ -303,7 +305,7 @@ impl Image {
 
         remove_dir_all(image_path)?;
 
-        info!("directory deleted successfully");
+        info!("deleted image directory.");
         Ok(())
     }
     pub fn delete(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -317,7 +319,7 @@ impl Image {
         self.delete_image_json()?;
         self.delete_image_directory()?;
 
-        info!("image deleted successfully");
+        info!("deleted image.");
         Ok(())
     }
 

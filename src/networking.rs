@@ -20,9 +20,9 @@ pub fn create_network_namespace(container_id: &str) -> Result<(), Box<dyn std::e
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
+    info!("created network namespace.");
     Ok(())
 }
-
 pub fn delete_network_namespace(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("deleting network namespace...");
     let namespace = format!("{}-ns", container_id);
@@ -36,6 +36,7 @@ pub fn delete_network_namespace(container_id: &str) -> Result<(), Box<dyn std::e
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
+    info!("deleted network namespace.");
     Ok(())
 }
 
@@ -71,9 +72,9 @@ pub fn create_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
+    info!("created bridge.");
     Ok(())
 }
-
 pub fn delete_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("deleting bridge...");
 
@@ -87,6 +88,7 @@ pub fn delete_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
+    info!("deleted bridge.");
     Ok(())
 }
 
@@ -113,9 +115,9 @@ pub fn create_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>>
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
+    info!("created veth.");
     Ok(())
 }
-
 pub fn delete_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("deleting veth...");
 
@@ -131,6 +133,7 @@ pub fn delete_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>>
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
+    info!("deleted veth.");
     Ok(())
 }
 
@@ -148,9 +151,9 @@ pub fn add_veth_to_bridge(container_id: &str) -> Result<(), Box<dyn std::error::
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
+    info!("added veth to bridge.");
     Ok(())
 }
-
 pub fn remove_veth_from_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("removing veth from bridge...");
 
@@ -164,6 +167,7 @@ pub fn remove_veth_from_bridge(container_id: &str) -> Result<(), Box<dyn std::er
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
+    info!("removed veth from bridge.");
     Ok(())
 }
 
@@ -229,6 +233,7 @@ pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Resul
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
+    info!("added container to network.");
     Ok(())
 }
 
@@ -246,5 +251,6 @@ pub fn delete_container_from_network(container_id: &str) -> Result<(), Box<dyn s
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
+    info!("deleted container from network.");
     Ok(())
 }

@@ -154,8 +154,8 @@ pub fn print_caps() {
             // .arg("| grep Current")
             .output();
     if let Err(e) = output {
-        info!("error printing capabilities: {}", e);
+        debug!("error printing capabilities: {}", e);
     } else {
-        info!("capabilities: \n{}", String::from_utf8_lossy(&output.unwrap().stdout));
+        debug!("capabilities: \n{}", String::from_utf8_lossy(&output.unwrap().stdout));
     }
 }

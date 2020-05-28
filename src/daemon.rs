@@ -55,6 +55,7 @@ impl<'a> Daemon<'a> {
         let s_path_str = utils::get_socket_path(s_name.as_str()).unwrap();
         let socket = Daemon::create_socket(s_path_str.clone())?;
 
+        info!("created daemon.");
         Ok(Daemon {
             listener: socket,
             image_manager: ImageManager::new(),
@@ -75,6 +76,7 @@ impl<'a> Daemon<'a> {
         let addr = listener.local_addr()?;
         info!("listener local address: {:?}", addr);
 
+        info!("created socket.");
         Ok(listener)
     }
 
@@ -154,7 +156,7 @@ impl<'a> Daemon<'a> {
         info!("sending response...");
         temp_stream.write_all(b"OK")?;
 
-        info!("cliend handled succesfully!");
+        info!("handled cliend.");
         Ok(())
     }
 }

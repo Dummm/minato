@@ -23,6 +23,8 @@ impl<'a>  ImageManager<'a> {
     }
     // TODO: Modularize
     pub fn pull(&self, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        info!("pulling image...");
+
         // let mut image = match Image::load(image_id).unwrap() {
         //         Some(image) => image,
         //         None => Image::new(image_id)
@@ -31,7 +33,9 @@ impl<'a>  ImageManager<'a> {
         info!("image: {} {} {} {}",
             image.id, image.name, image.reference, image.path);
 
-        image.pull()
+        image.pull()?;
+        info!("pulled image.");
+        Ok(())
     }
 
     #[allow(dead_code)]
@@ -40,8 +44,11 @@ impl<'a>  ImageManager<'a> {
         self.delete(image_id)
     }
     pub fn delete(&self, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        info!("deleting image...");
         let image = Image::new(image_id);
 
-        image.delete()
+        image.delete()?;
+        info!("deleted image.");
+        Ok(())
     }
 }

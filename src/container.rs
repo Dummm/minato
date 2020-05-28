@@ -8,6 +8,7 @@ use std::env;
 use nix::mount::{mount, MntFlags, MsFlags, umount, umount2};
 use nix::sched::{CloneFlags, unshare};
 use nix::sys::stat::Mode;
+use std::process::exit;
 // use nix::sys::stat::{Mode, makedev, mknod, SFlag};
 use nix::sys::wait::waitpid;
 use nix::unistd::*;
@@ -67,7 +68,7 @@ impl Container {
         let spec_path = format!("{}/config.json", &self.path);
         self.spec.save(spec_path.as_str())?;
 
-        info!("config json created successfully");
+        info!("created config json.");
         Ok(())
     }
     fn create_directory_structure(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -91,10 +92,12 @@ impl Container {
             )?;
         }
 
+        info!("created container directory structure.");
         Ok(())
     }
     pub fn create(&self) -> Result<(), Box<dyn std::error::Error>> {
-        info!("creating container '{}, {}, {:?}'...", &self.id, &self.path, &self.spec);
+        info!("creating container");
+        debug!("container fields: {}, {}, {:?}'...", &self.id, &self.path, &self.spec);
 
         if Path::new(&self.path).exists() {
             info!("container exists. skipping creation...");
@@ -104,7 +107,7 @@ impl Container {
         self.create_directory_structure()?;
         self.generate_config_json()?;
 
-        info!("container created successfully");
+        info!("created container.");
         Ok(())
     }
 
@@ -165,7 +168,7 @@ impl Container {
         let full_arg = format!("{},{},{}",
             lowerdir_arg, upperdir_arg, workdir_arg
         );
-        info!("mount arguments: \n{}\n{}\n{}\n{}",
+        debug!("mount arguments: \n{}\n{}\n{}\n{}",
             lowerdir_arg, upperdir_arg, workdir_arg, mergeddir_arg);
 
         // let output = Command::new("./fuse-overlayfs/fuse-overlayfs")
@@ -185,7 +188,7 @@ impl Container {
             Some(full_arg.as_str())
         )?;
 
-        info!("container filesystem mounted successfully...");
+        info!("mounted container filesystem.");
         Ok(())
     }
     fn prepare_container_mountpoint(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -206,10 +209,10 @@ impl Container {
             }
         }
 
-        info!("unsharing parent namespaces...");
+        info!("unsharing parent namespaces");
         unshare(clone_flags)?;
 
-        info!("making parent root private...");
+        info!("making parent root private");
         mount(
             None::<&str>,
             "/",
@@ -223,7 +226,7 @@ impl Container {
             utils::get_container_path(&self)?
         );
         let rootfs = rootfs_path_str.as_str();
-        info!("mounting container root...");
+        info!("mounting container root");
         mount(
             Some(rootfs),
             rootfs,
@@ -232,11 +235,10 @@ impl Container {
             None::<&str>,
         )?;
 
-        info!("changind directory to container root [{}]...", rootfs);
+        info!("changing directory to container root [{}]...", rootfs);
         chdir(rootfs)?;
 
-
-        // TOOD: Move?
+        // TODO: Move?
         let home = match dirs::home_dir() {
             Some(path) => path,
             None       => return Err("error getting home directory".into())
@@ -245,7 +247,7 @@ impl Container {
             "{}/.minato/tini",
             home.display()
         );
-        info!("binding init binary to container...");
+        info!("binding init executable to container...");
         let tini_bin = "sbin/tini";
         if !Path::new(&tini_bin).exists() {
             fs::File::create(&tini_bin)?;
@@ -258,7 +260,6 @@ impl Container {
         // info!("{:o}", permissions.mode());
 
         // }
-        info!("{}", tini_path);
         mount(
             Some(tini_path.as_str()),
             tini_bin,
@@ -276,7 +277,7 @@ impl Container {
 
         // )?;
 
-        info!("container mountpoint prepared successfully...");
+        info!("prepared container mountpoint.");
         Ok(())
     }
     fn prepare_container_directories(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -327,6 +328,7 @@ impl Container {
             Mode::S_IROTH |                 Mode::S_IXOTH
         )?;
 
+        info!("prepared container directories.");
         Ok(())
     }
     fn prepare_container_networking(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -365,7 +367,7 @@ impl Container {
             networking::add_veth_to_bridge(&self.id)?;
         }
 
-        info!("container networking prepared successfuly...");
+        info!("prepared container networking.");
         Ok(())
     }
     fn mount_container_cgroup_hierarchy(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -405,7 +407,7 @@ impl Container {
             )?;
         }
 
-        info!("container cgroup hierarchy mounted successfully...");
+        info!("mounted container cgroup hierarchy.");
         Ok(())
     }
     #[allow(dead_code)]
@@ -457,7 +459,7 @@ impl Container {
             }
         }
 
-        info!("cgroups configured successfully...");
+        info!("configured cgroups.");
         Ok(())
     }
     fn mount_container_directories(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -486,7 +488,7 @@ impl Container {
         // )?;
 
         // Slashes?
-        info!("mounting dev...");
+        info!("mounting dev to dev...");
         mount(
             Some("/dev"),
             "dev",
@@ -556,34 +558,19 @@ impl Container {
             //     )?;
         // }
 
-        info!("container directories mounted successfully...");
+        info!("mounted container directories.");
         Ok(())
     }
     fn prepare_container_id_maps(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing container id maps...");
-        // let newuid = 3333;
-        // let newuid = 1000;
-        // let newuid = 0;
-        let newuid = self.spec.process.user.uid;
+
+        debug!("uid: {} - euid: {}", Uid::current(), Uid::effective());
+        debug!("gid: {} - egid: {}", Gid::current(), Gid::effective());
+
         // let uid = unistd::getuid();
         let uid = 0;
-        // let newgid = 3333;
-        // let newgid = 1000;
-        // let newgid = 0;
-        let newgid = self.spec.process.user.gid;
-        // let gid = unistd::getgid();
-        let gid = 0;
-
-        // let setgroups_path = Path::new("/proc/self/setgroups");
-        // if setgroups_path.exists() {
-        //     fs::remove_file(setgroups_path)?;
-        // }
-
-        info!("uid: {} - euid: {}", Uid::current(), Uid::effective());
-        info!("gid: {} - egid: {}", Gid::current(), Gid::effective());
-
+        let newuid = self.spec.process.user.uid;
         let buf = format!("{} {} 1\n", newuid, uid);
-        // let buf2 = format!("{} {} 1\n", newuid, 65534);
         let fd = open("/proc/self/uid_map", OFlag::O_WRONLY, Mode::empty())?;
         info!("writing 'uid_map'");
         write(fd, buf.as_bytes())?;
@@ -594,9 +581,12 @@ impl Container {
         write(fd, "deny".as_bytes())?;
         close(fd)?;
 
+        // let gid = unistd::getgid();
+        let gid = 0;
+        let newgid = self.spec.process.user.gid;
         let buf = format!("{} {} 1\n", newgid, gid);
         let fd = open("/proc/self/gid_map", OFlag::O_WRONLY, Mode::empty())?;
-        info!("writing 'gid_map' (could fail)");
+        info!("writing 'gid_map'");
         write(fd, buf.as_bytes())?;
         close(fd)?;
 
@@ -606,7 +596,7 @@ impl Container {
         //     .collect();
         // setgroups(gids.as_slice())?;
 
-        info!("container id maps prepared successfully");
+        info!("prepared container id maps.");
         Ok(())
     }
     #[allow(dead_code)]
@@ -618,7 +608,6 @@ impl Container {
 
         let newuid = self.spec.process.user.uid;
         let newgid = self.spec.process.user.gid;
-
 
         info!("setting ids...");
         let root_uid = Uid::from_raw(newuid as u32);
@@ -648,7 +637,7 @@ impl Container {
             std::fs::remove_dir_all("/put_old")?;
         }
 
-        info!("container root pivoted successfully");
+        info!("pivoted container root.");
         Ok(())
     }
     fn execute_inner_fork(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -667,11 +656,9 @@ impl Container {
                 // }
 
                 self.do_exec()?;
-                // self.do_exec("/bin/sh")?;
-                // self.do_exec("/sbin/init")?;
 
                 // Should not reach
-                info!("exiting child process...");
+                error!("exited child process. (should not reach!)");
                 std::process::exit(0);
             }
             Ok(ForkResult::Parent { child, .. }) => {
@@ -679,16 +666,16 @@ impl Container {
 
                 info!("inner fork child pid: {}", child);
 
-                info!("waiting for child...");
-
                 if !daemon {
+                    info!("waiting for child...");
                     waitpid(child, None)?;
+                    exit(0);
                 }
             }
-            Err(_) => {}
+            Err(e) => error!("inner fork error: {}", e)
         };
 
-        info!("inner fork executed successfully");
+        info!("executed inner fork.");
         Ok(())
     }
     fn remount_container_directories(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -711,8 +698,8 @@ impl Container {
             std::fs::remove_dir_all("/old_proc")?;
         }
 
-        // BUG: Unsure if it's needed
-        info!("mounting remounting container root...");
+        // BUG: Unsure if it's needed. Probably for userns
+        info!("remounting container root...");
         mount(
             Some("/"),
             "/",
@@ -721,7 +708,7 @@ impl Container {
             None::<&str>,
         )?;
 
-        info!("container directories remounted successfully...");
+        info!("remounted container directories.");
         Ok(())
     }
     fn do_exec(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -779,13 +766,13 @@ impl Container {
         Ok(())
     }
     fn unmount_container_filesystem(&self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("unmounting container filesystem...");
         let merged = format!("{}/merged", &self.path);
 
         info!("unmounting '{}'...", merged);
-        // umount2(merged.as_str(), MntFlags::MNT_DETACH)?;
-        // umount2(merged.as_str(), MntFlags::MNT_FORCE)?;
         umount(merged.as_str())?;
 
+        info!("unmounted container filesystem.");
         Ok(())
     }
     fn cleanup(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -800,13 +787,13 @@ impl Container {
             fs::remove_file(&pid_path)?;
         }
 
-        info!("cleanup successful");
+        info!("cleaned up (after) container.");
         Ok(())
     }
     fn clean_run(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
 
-        // debug!("uid: {}, euid:{}", getuid().as_raw(), geteuid().as_raw());
-        // debug!("gid: {}, egid:{}", getgid().as_raw(), getegid().as_raw());
+        debug!("uid: {} - euid: {}", Uid::current(), Uid::effective());
+        debug!("gid: {} - egid: {}", Gid::current(), Gid::effective());
 
         self.mount_container_filesystem()?;
 
@@ -842,9 +829,9 @@ impl Container {
         info!("executing outer fork...");
         let result = match fork() {
             Ok(ForkResult::Child) => {
-                self.clean_run(daemon)
+                self.clean_run(daemon)?;
 
-                // std::process::exit(0)
+                return Ok(());
             }
             Ok(ForkResult::Parent { child, .. }) => {
                 info!("outer fork child pid: {}", child);
@@ -861,17 +848,18 @@ impl Container {
 
                 if !daemon {
                     waitpid(child, None)?;
+                    // exit(0);
                 }
 
                 Ok(())
             }
             Err(e) => Err(From::from(e))
         };
-        info!("outer fork executed successfully");
+        info!("executed outer fork.");
 
         self.cleanup()?;
 
-        info!("container run successful...");
+        info!("ran container.");
         result
         // match result {
         //     Err(e) => {
@@ -895,7 +883,7 @@ impl Container {
 
         fs::remove_dir_all(container_path)?;
 
-        info!("deletion successfull");
+        info!("deleted container");
         Ok(())
     }
 }

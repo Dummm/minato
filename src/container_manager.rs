@@ -32,6 +32,8 @@ impl<'a> ContainerManager<'a> {
         self.create(container_name, image_name)
     }
     pub fn create(&self, container_name: &str, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        info!("creating container '{}'...", container_name);
+
         let image = match Image::load(image_id)? {
             Some(image) => image,
             None        => {
@@ -45,7 +47,9 @@ impl<'a> ContainerManager<'a> {
 
         let container = Container::new(Some(container_name), Some(image));
 
-        container.create()
+        container.create()?;
+        info!("created container.");
+        Ok(())
     }
 
     #[allow(dead_code)]
@@ -71,8 +75,9 @@ impl<'a> ContainerManager<'a> {
             return Ok(())
         }
 
-
-        container.run(daemon)
+        container.run(daemon)?;
+        info!("ran container.");
+        Ok(())
     }
 
     fn set_namespace(&self, fd: &str, flag: CloneFlags) -> Result<(), Box<dyn std::error::Error>> {
@@ -135,6 +140,7 @@ impl<'a> ContainerManager<'a> {
         namespaces.insert(CloneFlags::CLONE_NEWUSER, "user");
 
         let pid_path = format!("/proc/{}/ns", container_pid);
+        info!("setting namespaces...");
         for namespace in namespaces {
             let ns_path = format!("{}/{}", pid_path, namespace.1);
             self.set_namespace(ns_path.as_str(), namespace.0)?;
@@ -154,7 +160,7 @@ impl<'a> ContainerManager<'a> {
             }
         };
 
-        info!("container opened successfully...");
+        info!("opened container.");
         result
     }
 
@@ -174,7 +180,7 @@ impl<'a> ContainerManager<'a> {
         let pid_int: i32 = pid.parse()?;
         kill(Pid::from_raw(pid_int), Signal::SIGTERM)?;
 
-        info!("container stopped successfully");
+        info!("stopped container.");
         Ok(())
     }
 
@@ -184,8 +190,11 @@ impl<'a> ContainerManager<'a> {
         self.delete(container_name)
     }
     pub fn delete(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+        info!("deleting container...");
         let container = Container::new(Some(container_name), None);
 
-        container.delete()
+        container.delete()?;
+        info!("deleted container.");
+        Ok(())
     }
 }

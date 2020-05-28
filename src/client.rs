@@ -16,6 +16,7 @@ impl Client {
         let s_path_str = utils::get_socket_path(s_name.as_str()).unwrap();
         let socket = Client::connect_to_socket(s_path_str.clone())?;
 
+        info!("created client.");
         Ok(Client {
             stream: socket
         })
@@ -28,6 +29,7 @@ impl Client {
         let addr = stream.local_addr()?;
         info!("listener local address: {:?}", addr);
 
+        info!("created socket.");
         Ok(stream)
     }
 
