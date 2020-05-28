@@ -246,29 +246,41 @@ impl FromStr for ContainerAction {
 }
 
 
-// TODO: DOCUMANTATIE
-// TODO: Fix daemon container closing
 /**
- * Might be because no ttys
- * Pid waiting is messed up
- * Might neeed to move a fork on the daemon side
-*/
-// TODO: Remove dev mount and add ttys
-// TODO: Add .minato folder creation
-// TODO: Add tini-static automatic download from github
-// TODO: Manage input and output from daemon
-// TODO: Add container states
-// TODO: Add UI
-// TODO: Add comment to end of function
-// TODO: Populate 'sys' and 'dev' instead of mounting them from parent (maybe remove target)
-// TODO: Pull containers from LXC repository
-// TODO: Check if 'index=on' is needed when mounting overlayfs
-// TODO: Add Cgroups + other spec configs
-// TODO: Fix networking
-// TODO: Fix unwraps so it doesn't panic
-// TODO: Change back names from c's to n'suse std::nix::net::UnixStream;
-// TODO: Manage project
-// TODO: Try archivemount instead of unarchiving layers
+ * * General
+ *   TODO: DOCUMANTATIE
+ *   TODO: Add .minato folder creation
+ *   TODO: Add tini-static automatic download from github
+ *   TODO: Add UI
+ *   TODO: Fix unwraps so it doesn't panic
+ *   TODO: Add comment to end of function
+ *   TODO: Change back names from c's to n's
+ *   TODO: Manage project
+ *
+ * * Container
+ *   TODO: Add container states (more code)
+ *   TODO: Add contianer state check (i.e. before deletion)
+ *   TODO: Remove dev mount and add ttys
+ *   TODO: Populate 'sys' and 'dev' instead of mounting them from parent (maybe remove target)
+ *   TODO: Pull containers from LXC repository
+ *   * Namespaces
+ *     TODO: Unshare user namespace later
+ *     TODO: Add namespace checks (i.e. check if userns is unshared)
+ *   * CGroups
+ *     TODO: Configure cgroups
+ *   * Mounts
+ *     TODO: Try archivemount instead of unarchiving layers
+ *     TODO: Check if 'index=on' is needed when mounting overlayfs
+ *   * Networking
+ *     TODO: Fix networking
+ *
+ * * Daemon
+ *   TODO: Fix daemon container closing
+ *     ? Might be because no ttys
+ *     ? Pid waiting is messed up
+ *     ? Might neeed to move a fork on the daemon side
+ *   TODO: Manage input and output from daemon
+ */
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     env_logger::builder()

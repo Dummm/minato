@@ -16,7 +16,7 @@ use nix::fcntl::{open, OFlag};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
 use dirs;
-use log::info;
+use log::{info, error, debug};
 
 use crate::image::Image;
 use crate::utils;
@@ -405,8 +405,59 @@ impl Container {
             )?;
         }
 
-
         info!("container cgroup hierarchy mounted successfully...");
+        Ok(())
+    }
+    #[allow(dead_code)]
+    fn configure_cgroups(&self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("configuring cgroups...");
+
+        let cgroup_path = format!("sys/fs/cgroup");
+        let resources = match &self.spec.linux.as_ref().unwrap().resources {
+            None => {
+                info!("no resources found. skipping...");
+                return Ok(())
+            },
+            Some(res) => res
+        };
+
+        info!("configuring devices cgroup...");
+        let devices = &resources.devices;
+        // let devices = match resources.devices {
+        //     None => {
+        //         info!("no devices found. skipping...");
+        //         return Ok(())
+        //     },
+        //     Some(dev) => dev
+        // };
+        for device in devices {
+            debug!("{:?}", device);
+            let file = if device.allow {
+                "devices.allow"
+            } else {
+                "devices.deny"
+            };
+            // TODO: Necessary?
+            let typ = device.typ.as_str();
+            let major = match device.major {
+                Some(x) => x.to_string(),
+                None    => "*".to_string()
+            };
+            let minor = match device.minor {
+                Some(x) => x.to_string(),
+                None    => "*".to_string()
+            };
+            let acc = device.access.as_str();
+            let data = format!{"{} {}:{} {}", typ, &major, &minor, acc};
+
+            let devices_path = format!("{}/devices/{}", cgroup_path, file);
+            info!{"writing {} to {}", data, devices_path};
+            if let Err(e) = fs::write(devices_path, data.as_bytes()) {
+                error!("{}", e);
+            }
+        }
+
+        info!("cgroups configured successfully...");
         Ok(())
     }
     fn mount_container_directories(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -422,6 +473,8 @@ impl Container {
         )?;
 
         self.mount_container_cgroup_hierarchy()?;
+        debug!("TODO: cgroups configuring");
+        // self.configure_cgroups()?;
 
         // info!("mounting sys...");
         // mount(
@@ -751,6 +804,9 @@ impl Container {
         Ok(())
     }
     fn clean_run(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
+
+        // debug!("uid: {}, euid:{}", getuid().as_raw(), geteuid().as_raw());
+        // debug!("gid: {}, egid:{}", getgid().as_raw(), getegid().as_raw());
 
         self.mount_container_filesystem()?;
 

@@ -183,7 +183,6 @@ impl<'a> ContainerManager<'a> {
         let container_name = args.value_of("container-name").unwrap();
         self.delete(container_name)
     }
-    // TODO: Add contianer state check
     pub fn delete(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let container = Container::new(Some(container_name), None);
 
