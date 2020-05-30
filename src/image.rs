@@ -24,6 +24,7 @@ pub struct Image {
 // TODO: Move load, add 'exists' function
 // TODO: Check to see if 'self's are required
 impl Image {
+    /// Create a new image object
     pub fn new(image_id: &str) -> Image {
         let id = utils::fix_image_id(image_id).unwrap();
         let (image_name, image_reference) = utils::split_image_id(id.clone()).unwrap();
@@ -40,6 +41,7 @@ impl Image {
     }
 
     // TODO: Clean-up mess
+    /// Load an image from storage
     pub fn load(image_id: &str) -> Result<Option<Image>, Box<dyn std::error::Error>> {
         let mut image = Image::new(image_id);
 
@@ -62,6 +64,7 @@ impl Image {
         Ok(Some(image))
     }
 
+    /// Get authentication toket from docker repository to download image json
     fn get_authentication_token(&self, auth_url: &str) -> Result<String, Box<dyn std::error::Error>> {
         info!("sending authentication token request to: {}...", auth_url);
 
@@ -78,6 +81,7 @@ impl Image {
         info!("retrieved token.");
         Ok(token.clone())
     }
+    /// Download the image json
     fn get_image_json(&self, token: &str, manifests_url: &str) -> Result<Value, Box<dyn std::error::Error>> {
         info!("sending manifests request to: {}...", manifests_url);
 
@@ -91,6 +95,7 @@ impl Image {
         info!("retrieved manifests.");
         Ok(body)
     }
+    /// Write the image json in the images/json directory
     fn write_image_json(&self, body: Value) -> Result<(), Box<dyn std::error::Error>> {
         info!("writing image json...");
         let image_id = utils::fix_image_id(&self.id).unwrap();
@@ -121,6 +126,7 @@ impl Image {
         info!("written image json");
         Ok(())
     }
+    /// Extract the fs_layers field from the json
     fn extract_layers_from_body(&self, body: Value) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
         info!("extracting fs_layers...");
 
@@ -132,6 +138,7 @@ impl Image {
         info!("extracted fs_layers.");
         Ok(fs_layers.clone())
     }
+    /// Download the blob for a single fs_layer
     fn download_layer(&mut self, token: &str, fs_layer: &Value) -> Result<(), Box<dyn std::error::Error>> {
         if let Value::String(blob_sum) = &fs_layer["blobSum"] {
             let digest = blob_sum.replace("sha256:", "");
@@ -162,6 +169,7 @@ impl Image {
         Ok(())
     }
     // TODO: Change the way unpacking is skipped
+    /// Unpack archive containing an image layer
     fn unpack_image_layers(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("unpacking image layers...");
 
@@ -193,6 +201,7 @@ impl Image {
         Ok(())
     }
     // TODO: Check if file exists before removal?
+    /// Remove all archives after unpacking them
     fn remove_archives(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("cleaning up image directory...");
 
@@ -215,6 +224,7 @@ impl Image {
         info!("cleaned up image directory.");
         Ok(())
     }
+    /// Pull an image from the docker repository and store it
     fn pull_from_docker(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("pulling image from docker repository...");
 
@@ -249,6 +259,7 @@ impl Image {
         info!("pulled image from docker repository.");
         Ok(())
     }
+    /// Pull and store an image
     pub fn pull(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("pulling image...");
 
@@ -263,6 +274,7 @@ impl Image {
         Ok(())
     }
 
+    /// Delete image's json from the jsons folder
     fn delete_image_json(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting image json...");
 
@@ -293,6 +305,7 @@ impl Image {
         info!("deleted image json.");
         Ok(())
     }
+    /// Delete image directory
     fn delete_image_directory(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting image directory...");
 
@@ -308,6 +321,7 @@ impl Image {
         info!("deleted image directory.");
         Ok(())
     }
+    /// Delete image from storage
     pub fn delete(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting image...");
 

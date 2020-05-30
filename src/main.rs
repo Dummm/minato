@@ -270,26 +270,32 @@ impl FromStr for ContainerAction {
  *   TODO: Remove dev mount and add ttys
  *   TODO: Populate 'sys' and 'dev' instead of mounting them from parent (maybe remove target)
  *   TODO: Pull containers from LXC repository
+ *   TODO: Check if the inner fork is required or it works only with the execve
  *   * Namespaces
  *     TODO: Unshare user namespace later
  *     TODO: Set uid and gids in user namespace
  *     TODO: Add namespace checks (i.e. check if userns is unshared)
  *   * CGroups
+ *     ? /dev might have to be binded to the parent
+ *     TODO: Try 'mount -t cgroup -o all cgroup /sys/fs/cgroup' to mount all cgroups faster
  *     TODO: Configure cgroups
  *   * Mounts
  *     TODO: Try archivemount instead of unarchiving layers
  *     TODO: Check if 'index=on' is needed when mounting overlayfs
  *   * Networking
  *     TODO: Fix networking
+ *     TODO: Create a socket for each container
  *
- * * Image
- *   TODO: Add containers to image listing
  * * Daemon
+ *   TODO: Check if the daemon does the clean-up steps before the child is stopped
  *   TODO: Fix daemon container closing
  *     ? Might be because no ttys
  *     ? Pid waiting is messed up
  *     ? Might neeed to move a fork on the daemon side
  *   TODO: Manage input and output from daemon
+ *
+ * * Image
+ *   TODO: Add containers to image listing
  */
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {

@@ -29,11 +29,13 @@ pub struct Spec {
     pub annotations: HashMap<String, String>,
 }
 impl Spec {
+    /// Create a new spec object
     pub fn new() -> Result<Spec, Box<dyn std::error::Error>> {
         let spec = Spec::load("config.json")?;
         Ok(spec)
     }
 
+    /// Load a spec object from storage
     pub fn load(path: &str) -> Result<Spec, Box<dyn std::error::Error>> {
         if !Path::new(path).exists() {
             Spec::load("config.json")?;
@@ -44,6 +46,7 @@ impl Spec {
         Ok(spec)
     }
 
+    /// Save a spec object to storage
     pub fn save(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut file = File::create(path)?;
         serde_json::to_writer(&mut file, &self)?;

@@ -42,6 +42,7 @@ pub struct Daemon<'a> {
 //     }
 // }
 impl<'a> Daemon<'a> {
+    /// Create a new daemon object
     pub fn new() -> Result<Daemon<'a>, Box<dyn std::error::Error>> {
         info!("creating daemon...");
         // let mut rng = thread_rng();
@@ -63,6 +64,7 @@ impl<'a> Daemon<'a> {
         })
     }
 
+    /// Create a socket to listen to commands from clients
     fn create_socket(socket_path: String) -> Result<UnixListener, Box<dyn std::error::Error>> {
         info!("creating socket...");
 
@@ -80,6 +82,7 @@ impl<'a> Daemon<'a> {
         Ok(listener)
     }
 
+    /// Start the daemon by listening for commands through the socket
     pub fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("starting daemon...");
 
@@ -132,6 +135,7 @@ impl<'a> Daemon<'a> {
     //     Ok(())
     // }
 
+    /// Convert string command recieved from client and execute it
     fn handle_client(&self, stream: UnixStream) -> Result<(), Box<dyn std::error::Error>> {
         info!("handling client...");
 

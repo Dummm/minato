@@ -7,6 +7,7 @@ use std::fs;
 use std::path::Path;
 
 #[allow(dead_code)]
+/// Create a network namespace for tha container
 pub fn create_network_namespace(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("creating network namespace...");
     let namespace = format!("{}-ns", container_id);
@@ -23,6 +24,7 @@ pub fn create_network_namespace(container_id: &str) -> Result<(), Box<dyn std::e
     info!("created network namespace.");
     Ok(())
 }
+/// Delete the container's network namespace
 pub fn delete_network_namespace(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("deleting network namespace...");
     let namespace = format!("{}-ns", container_id);
@@ -42,6 +44,7 @@ pub fn delete_network_namespace(container_id: &str) -> Result<(), Box<dyn std::e
 
 // TODO: Replace hardcode
 // TODO: Combine command arguments
+/// Create network bridge
 pub fn create_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("creating bridge...");
 
@@ -75,6 +78,7 @@ pub fn create_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error
     info!("created bridge.");
     Ok(())
 }
+/// Delete network bridge
 pub fn delete_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("deleting bridge...");
 
@@ -92,6 +96,7 @@ pub fn delete_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
+/// Create virtual ethernet device between host and container
 pub fn create_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("creating veth...");
 
@@ -118,6 +123,7 @@ pub fn create_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>>
     info!("created veth.");
     Ok(())
 }
+/// Delete virtual ethernet device between host and container
 pub fn delete_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("deleting veth...");
 
@@ -137,6 +143,7 @@ pub fn delete_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
+/// Add the virtual ethernet to the bridge
 pub fn add_veth_to_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("adding veth to bridge...");
 
@@ -154,6 +161,7 @@ pub fn add_veth_to_bridge(container_id: &str) -> Result<(), Box<dyn std::error::
     info!("added veth to bridge.");
     Ok(())
 }
+/// Remove the virtual ethernet from the bridge
 pub fn remove_veth_from_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("removing veth from bridge...");
 
@@ -172,6 +180,7 @@ pub fn remove_veth_from_bridge(container_id: &str) -> Result<(), Box<dyn std::er
 }
 
 #[allow(dead_code)]
+/// Add the container to the network namespace
 pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Result<(), Box<dyn std::error::Error>> {
     info!("adding container to network...");
 
@@ -236,7 +245,7 @@ pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Resul
     info!("added container to network.");
     Ok(())
 }
-
+/// Delete the container from the network namespace
 pub fn delete_container_from_network(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("deleting container from network...");
 

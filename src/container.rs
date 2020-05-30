@@ -36,6 +36,7 @@ pub struct Container {
     // pub state: State,
 }
 impl Container {
+    /// Create a new container object
     pub fn new(container_id: Option<&str>, image: Option<Image>) -> Container {
         let id: String = match container_id {
             Some(id) => id.to_string(),
@@ -60,6 +61,7 @@ impl Container {
         }
     }
 
+    /// Create a default config.json by saving the one in the project root. (It's loaded by default on object creation)
     fn generate_config_json(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("creating config json...");
 
@@ -71,6 +73,7 @@ impl Container {
         info!("created config json.");
         Ok(())
     }
+    /// Create a directory to download and store the container
     fn create_directory_structure(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("creating container directory structure...");
 
@@ -95,6 +98,7 @@ impl Container {
         info!("created container directory structure.");
         Ok(())
     }
+    /// Create and store a container
     pub fn create(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("creating container");
         debug!("container fields: {}, {}'...", &self.id, &self.path);
@@ -112,6 +116,7 @@ impl Container {
     }
 
     // TODO: Find a better way to find image
+    /// Load a stored container
     pub fn load(container_name: &str) -> Result<Option<Container>, Box<dyn std::error::Error>> {
         let mut container = Container::new(Some(container_name), None);
 
@@ -149,6 +154,7 @@ impl Container {
         Ok(Some(container))
     }
 
+    /// Mount the container layers in a single directory using overlayfs
     fn mount_container_filesystem(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("mounting container filesystem...");
 
@@ -191,6 +197,14 @@ impl Container {
         info!("mounted container filesystem.");
         Ok(())
     }
+    /// Prepare the container root
+    ///
+    /// Executed steps:
+    ///   - unsharing the namespaces
+    ///   - making the parent root private
+    ///   - mounting the container root
+    ///   - changing directory to container root
+    ///   - creating a 'tini' file and mount-binding it to the one in the .minato directoryg
     fn prepare_container_mountpoint(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing container mountpoint...");
 
@@ -280,6 +294,9 @@ impl Container {
         info!("prepared container mountpoint.");
         Ok(())
     }
+    /// Create container root directories for future actions
+    ///
+    /// Directories: put_old, dev, sys, proc, old_proc
     fn prepare_container_directories(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing container directories...");
 
@@ -331,6 +348,11 @@ impl Container {
         info!("prepared container directories.");
         Ok(())
     }
+    /// Prepare container for networking, communication with host network
+    ///
+    /// Executed steps:
+    ///   - binding /etc/hosts and /etc/resolv.conf to the same files in the parent
+    ///   - TO BE REENABLED: executing iproute2 commands to establish connection
     fn prepare_container_networking(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing container networking...");
 
@@ -370,6 +392,9 @@ impl Container {
         info!("prepared container networking.");
         Ok(())
     }
+    /// Mount all the neccessary cgroup directories in /sys/fs/cgroup
+    ///
+    /// The directories are populated automatically by the kernel
     fn mount_container_cgroup_hierarchy(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("mounting container cgroup hierarchy...");
 
@@ -411,6 +436,9 @@ impl Container {
         Ok(())
     }
     #[allow(dead_code)]
+    /// NOT WORKING: Probably because of loss of privilages
+    ///
+    /// Change the cgroup values according to the container's config.json file
     fn configure_cgroups(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("configuring cgroups...");
 
@@ -462,6 +490,15 @@ impl Container {
         info!("configured cgroups.");
         Ok(())
     }
+    /// Execute various mount operations
+    ///
+    /// Mounts:
+    ///   - proc fs to old_proc
+    ///   - parent /dev to /dev
+    ///
+    /// Other options:
+    ///   - /sys to /sys
+    ///   - not mounting dev to the parent and populating /dev manually
     fn mount_container_directories(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("mounting container directories...");
 
@@ -561,6 +598,11 @@ impl Container {
         info!("mounted container directories.");
         Ok(())
     }
+    /// Write the container maps
+    ///
+    /// 'uid_map' and 'gid_map' are a 1-1 mapping, root(0) to the configured id
+    ///
+    /// Setting 'setgroups' to 'deny' is required to get the user namespace to work
     fn prepare_container_id_maps(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing container id maps...");
 
@@ -600,6 +642,9 @@ impl Container {
         Ok(())
     }
     #[allow(dead_code)]
+    /// NOT WORKING: Not sure if it's supposed to work or not. Probably because of loss of privileges also
+    ///
+    /// Set the configured uid and gids
     fn prepare_container_ids(&self) -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = prctl::set_keep_capabilities(true) {
             info!("failed to set keep capabilities to true: {}", e);
@@ -624,6 +669,7 @@ impl Container {
         };
         Ok(())
     }
+    /// Pivot root to the container's root and unmount the auxilliary 'put_old' folder after
     fn pivot_container_root(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("pivoting container root..");
 
@@ -640,6 +686,9 @@ impl Container {
         info!("pivoted container root.");
         Ok(())
     }
+    /// Execute the inner fork, before executing the initial command
+    ///
+    /// Probably to enter all the namespaces after unsharing them
     fn execute_inner_fork(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
         info!("executing inner fork...");
 
@@ -678,6 +727,11 @@ impl Container {
         info!("executed inner fork.");
         Ok(())
     }
+    /// Remount directories, as a child process
+    ///
+    /// Remounts:
+    ///   - proc fs to 'proc', from 'old_proc'; then removes 'old_proc'
+    ///   - the root directory
     fn remount_container_directories(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("remounting container directories...");
 
@@ -711,6 +765,11 @@ impl Container {
         info!("remounted container directories.");
         Ok(())
     }
+    /// Execute the initial command, usually '/bin/sh'.
+    ///
+    /// Actually also runs an init process (tini) before, for more process management and initial command in daemon
+    ///
+    /// Daemon option not working yet
     fn do_exec(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing command execution...");
 
@@ -765,6 +824,7 @@ impl Container {
 
         Ok(())
     }
+    /// Unmount the overlay filesystem
     fn unmount_container_filesystem(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("unmounting container filesystem...");
         let merged = format!("{}/merged", &self.path);
@@ -775,6 +835,11 @@ impl Container {
         info!("unmounted container filesystem.");
         Ok(())
     }
+    /// Cleanup after running the container
+    ///
+    /// Executed steps:
+    ///   - unmount the overlay filesystem
+    ///   - remove the pid file from the container directory
     fn cleanup(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("cleaning up container...");
 
@@ -790,6 +855,21 @@ impl Container {
         info!("cleaned up (after) container.");
         Ok(())
     }
+    /// Separate run function necessary to execute a fork and cleanup
+    ///
+    /// Executed steps:
+    ///   - mount the container filesystem
+    ///   - prepare the container root mountpoint
+    ///   - prepare the container root directories
+    ///   - prepare the container root directories
+    ///   - prepare the container for networking
+    ///   - mount container directories
+    ///   - write the container id maps
+    ///   - pivot root
+    ///   - execute inner fork
+    ///     - remount proc and root
+    ///     - set hostname
+    ///     - execute initial command
     fn clean_run(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
 
         debug!("uid: {} - euid: {}", Uid::current(), Uid::effective());
@@ -823,6 +903,11 @@ impl Container {
 
         Ok(())
     }
+    /// Run a stored container
+    ///
+    /// Executes a fork before all the steps so it works with a daemon
+    ///
+    /// The parent creates a pid file that is used to check the container's state
     pub fn run(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
         info!("running container...");
 
@@ -872,6 +957,7 @@ impl Container {
         // }
     }
 
+    /// Delete a stored container
     pub fn delete(&self,) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting container '{}'...", &self.id);
 

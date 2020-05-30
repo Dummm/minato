@@ -19,6 +19,7 @@ pub struct ContainerManager<'a> {
     container_list: Vec<&'a Container>
 }
 impl<'a> ContainerManager<'a> {
+    /// Create a new container manager object
     pub fn new() -> ContainerManager<'a> {
         ContainerManager {
             container_list: Vec::new()
@@ -26,11 +27,13 @@ impl<'a> ContainerManager<'a> {
     }
 
     #[allow(dead_code)]
+    /// Create and store a new container from arguments passed to the executable
     pub fn create_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         let image_name = args.value_of("image-id").unwrap();
         let container_name = args.value_of("container-name").unwrap();
         self.create(container_name, image_name)
     }
+    /// Create and store a new container
     pub fn create(&self, container_name: &str, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("creating container '{}'...", container_name);
 
@@ -53,10 +56,12 @@ impl<'a> ContainerManager<'a> {
     }
 
     #[allow(dead_code)]
+    /// Run a stored container using arguments passed to the executable as parameters
     pub fn run_with_args(&self, args: &ArgMatches, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
         let container_name = args.value_of("container-name").unwrap();
         self.run(container_name, daemon)
     }
+    /// Run a stored container
     pub fn run(&self, container_name: &str, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
         info!("running container '{}'...", container_name);
 
@@ -80,6 +85,7 @@ impl<'a> ContainerManager<'a> {
         Ok(())
     }
 
+    /// Call the setns syscall to enter a container's namespaces
     fn set_namespace(&self, fd: &str, flag: CloneFlags) -> Result<(), Box<dyn std::error::Error>> {
         if !Path::new(fd).exists() {
             Ok(())
@@ -92,6 +98,7 @@ impl<'a> ContainerManager<'a> {
             }
         }
     }
+    /// Execute command inside container
     fn do_exec(&self, cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("preparing command execution...");
 
@@ -117,6 +124,7 @@ impl<'a> ContainerManager<'a> {
 
         Ok(())
     }
+    /// Open/enter a running container
     pub fn open(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("opening container...");
         // let pid = unistd::Pid::from_raw(container_pid.parse::<i32>().unwrap());
@@ -164,6 +172,7 @@ impl<'a> ContainerManager<'a> {
         result
     }
 
+    /// Stop a running container
     pub fn stop(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("stopping container...");
 
@@ -184,6 +193,7 @@ impl<'a> ContainerManager<'a> {
         Ok(())
     }
 
+    /// List all stored containers
     pub fn list(&self) -> Result<(), Box<dyn std::error::Error>> {
         let home = match dirs::home_dir() {
             Some(path) => path,
@@ -243,10 +253,12 @@ impl<'a> ContainerManager<'a> {
     }
 
     #[allow(dead_code)]
+    /// Delete a stored container using arguments passed to the executable as parameters
     pub fn delete_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         let container_name = args.value_of("container-name").unwrap();
         self.delete(container_name)
     }
+    /// Delete a stored container
     pub fn delete(&self, container_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting container...");
         let container = Container::new(Some(container_name), None);

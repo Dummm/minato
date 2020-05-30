@@ -19,10 +19,13 @@ impl<'a>  ImageManager<'a> {
     }
 
     #[allow(dead_code)]
+    /// Pull an image from the docker repository and store it; using arguments passed to the executable as parameters
     pub fn pull_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         let image_id = args.value_of("image-id").unwrap();
         self.pull(image_id)
     }
+
+    /// Pull an image from the docker repository and store it
     pub fn pull(&self, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("pulling image...");
 
@@ -39,6 +42,7 @@ impl<'a>  ImageManager<'a> {
         Ok(())
     }
 
+    /// List all stored images
     pub fn list(&self) -> Result<(), Box<dyn std::error::Error>> {
         let home = match dirs::home_dir() {
             Some(path) => path,
@@ -92,10 +96,12 @@ impl<'a>  ImageManager<'a> {
     }
 
     #[allow(dead_code)]
+    /// Delete an image from storage; using arguments passed to the executable as parameters
     pub fn delete_with_args(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         let image_id = args.value_of("image-id").unwrap();
         self.delete(image_id)
     }
+    /// Delete an image from storage
     pub fn delete(&self, image_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting image...");
         let image = Image::new(image_id);
