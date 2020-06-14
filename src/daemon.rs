@@ -86,12 +86,13 @@ impl<'a> Daemon<'a> {
     pub fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("starting daemon...");
 
-        let home = match dirs::home_dir() {
-            Some(path) => path,
-            None       => return Err("error getting home directory".into())
-        };
+        // let home = match dirs::home_dir() {
+        //     Some(path) => path,
+        //     None       => return Err("error getting home directory".into())
+        // };
 
-        let pid_path = format!("{}/.minato/pid", home.display());
+        // let pid_path = format!("{}/.minato/pid", home.display());
+        let pid_path = format!("/var/lib/minato/pid");
         if Path::new(&pid_path).exists() {
             info!("removing pid file...");
             fs::remove_file(&pid_path)?;

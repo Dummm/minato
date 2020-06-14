@@ -272,7 +272,7 @@ impl FromStr for ContainerAction {
  *   TODO: Pull containers from LXC repository
  *   TODO: Check if the inner fork is required or it works only with the execve
  *   * Namespaces
- *     TODO: Unshare user namespace later
+ *     TODO: Unshare user namespace later, separately
  *     TODO: Set uid and gids in user namespace
  *     TODO: Add namespace checks (i.e. check if userns is unshared)
  *   * CGroups

@@ -16,7 +16,7 @@ use nix::fcntl::{open, OFlag};
 #[allow(unused_imports)]
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
-use dirs;
+// use dirs;
 use log::{info, error, debug};
 
 use crate::image::Image;
@@ -128,14 +128,16 @@ impl Container {
         let container_lower_path = container_path.join("lower");
         let container_image_path = container_lower_path.read_link().unwrap();
 
-        let home = match dirs::home_dir() {
-            Some(path) => path,
-            None       => return Err("error getting home directory".into())
-        };
-        let images_path = format!(
-            "{}/.minato/images/",
-            home.display()
-        );
+        // let home = match dirs::home_dir() {
+        //     Some(path) => path,
+        //     None       => return Err("error getting home directory".into())
+        // };
+        // let images_path = format!(
+        //     "{}/.minato/images/",
+        //     home.display()
+        // );
+        debug!("{}", container_image_path.display());
+        let images_path = format!("/var/lib/minato/images/");
 
         let image_id = container_image_path
             .strip_prefix(images_path)
@@ -213,13 +215,14 @@ impl Container {
         let namespaces: &Vec<Namespace> = &self.spec.linux.as_ref().unwrap().namespaces;
         for ns in namespaces {
             match ns.typ {
-                NamespaceType::pid    => clone_flags |= CloneFlags::CLONE_NEWPID,
-                NamespaceType::mount  => clone_flags |= CloneFlags::CLONE_NEWNS,
-                NamespaceType::uts    => clone_flags |= CloneFlags::CLONE_NEWUTS,
-                NamespaceType::ipc    => clone_flags |= CloneFlags::CLONE_NEWIPC,
-                NamespaceType::user   => clone_flags |= CloneFlags::CLONE_NEWUSER,
-                NamespaceType::cgroup => clone_flags |= CloneFlags::CLONE_NEWCGROUP,
-                _ => {}
+                NamespaceType::pid     => clone_flags |= CloneFlags::CLONE_NEWPID,
+                NamespaceType::mount   => clone_flags |= CloneFlags::CLONE_NEWNS,
+                NamespaceType::uts     => clone_flags |= CloneFlags::CLONE_NEWUTS,
+                NamespaceType::ipc     => clone_flags |= CloneFlags::CLONE_NEWIPC,
+                NamespaceType::user    => clone_flags |= CloneFlags::CLONE_NEWUSER,
+                NamespaceType::cgroup  => clone_flags |= CloneFlags::CLONE_NEWCGROUP,
+                NamespaceType::network => clone_flags |= CloneFlags::CLONE_NEWNET,
+                // _ => {}
             }
         }
 
@@ -253,14 +256,15 @@ impl Container {
         chdir(rootfs)?;
 
         // TODO: Move?
-        let home = match dirs::home_dir() {
-            Some(path) => path,
-            None       => return Err("error getting home directory".into())
-        };
-        let tini_path = format!(
-            "{}/.minato/tini",
-            home.display()
-        );
+        // let home = match dirs::home_dir() {
+        //     Some(path) => path,
+        //     None       => return Err("error getting home directory".into())
+        // };
+        // let tini_path = format!(
+        //     "{}/.minato/tini",
+        //     home.display()
+        // );
+        let tini_path = format!("/var/lib/minato/tini");
         info!("binding init executable to container...");
         let tini_bin = "sbin/tini";
         if !Path::new(&tini_bin).exists() {
@@ -379,15 +383,6 @@ impl Container {
             MsFlags::MS_BIND | MsFlags::MS_NOSUID | MsFlags::MS_NODEV,
             None::<&str>,
         )?;
-
-        // TODO: Add iproute2 check
-        // if true {
-        if false {
-            // networking::create_network_namespace(&container.id)?;
-            networking::create_bridge(&self.id)?;
-            networking::create_veth(&self.id)?;
-            networking::add_veth_to_bridge(&self.id)?;
-        }
 
         info!("prepared container networking.");
         Ok(())
@@ -846,6 +841,16 @@ impl Container {
         // chdir("/")?;
         self.unmount_container_filesystem()?;
 
+        // TODO: Move code where it belongs(???)
+        if true {
+        // if false {
+            networking::delete_container_from_network(&self.id)?;
+            networking::remove_veth_from_bridge(&self.id)?;
+            networking::delete_veth(&self.id)?;
+            networking::delete_bridge(&self.id)?;
+            networking::delete_network_namespace(&self.id)?;
+        }
+
         let pid_path = format!("{}/pid", self.path);
         if Path::new(&pid_path).exists() {
             info!("removing pid file...");
@@ -891,15 +896,6 @@ impl Container {
 
         self.execute_inner_fork(daemon)?;
 
-        // TODO: Move code where it belongs(???)
-        // if true {
-        if false {
-            networking::delete_container_from_network(&self.id)?;
-            networking::remove_veth_from_bridge(&self.id)?;
-            networking::delete_veth(&self.id)?;
-            networking::delete_bridge(&self.id)?;
-            networking::delete_network_namespace(&self.id)?;
-        }
 
         Ok(())
     }
@@ -921,6 +917,16 @@ impl Container {
             Ok(ForkResult::Parent { child, .. }) => {
                 info!("outer fork child pid: {}", child);
 
+                // TODO: Add iproute2 check
+                if true {
+                // if false {
+                    // networking::create_network_namespace(&container.id)?;
+                    networking::create_bridge(&self.id)?;
+                    networking::create_veth(&self.id)?;
+                    networking::add_veth_to_bridge(&self.id)?;
+                    networking::add_container_to_network(&self.id, child)?;
+                }
+
                 info!("writing pid file...");
                 let pid_path = format!("{}/pid", self.path);
                 if Path::new(&pid_path).exists() {
@@ -930,6 +936,31 @@ impl Container {
                 let pid_str = format!("{}\n", child.as_raw().to_string());
                 fs::File::create(&pid_path)?;
                 fs::write(pid_path, pid_str)?;
+
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                // Path::new("/proc/self/ns")
+                //     .read_dir().unwrap()
+                //     .for_each(|dir| {
+                //         let ns_path = format!("{}",
+                //             dir.unwrap()
+                //             .path()
+                //             .display());
+                //         let link = format!("{}", fs::read_link(&ns_path).unwrap().display());
+                //         let ns_dir_path = format!("{}/{}",
+                //             &self.path,
+                //             Path::new(&ns_path)
+                //                 .strip_prefix(Path::new("/proc/self/ns/")).unwrap()
+                //                 .display()
+                //             );
+
+                //         info!("{} -> {}", ns_dir_path, link);
+                //         // if let Err(e) = fs::copy(ns_path, ns_dir_path) {
+                //         //     info!("{}", e);
+                //         // };
+                //         if let Err(e) = fs::soft_link(ns_dir_path, link) {
+                //             info!("{}", e);
+                //         };
+                //     });
 
                 if !daemon {
                     waitpid(child, None)?;

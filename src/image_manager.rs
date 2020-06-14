@@ -44,11 +44,12 @@ impl<'a>  ImageManager<'a> {
 
     /// List all stored images
     pub fn list(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let home = match dirs::home_dir() {
-            Some(path) => path,
-            None       => return Err("error getting home directory".into())
-        };
-        let images_path = format!("{}/.minato/images/json", home.display());
+        // let home = match dirs::home_dir() {
+        //     Some(path) => path,
+        //     None       => return Err("error getting home directory".into())
+        // };
+        // let images_path = format!("{}/.minato/images/json", home.display());
+        let images_path = format!("/var/lib/minato/images/json");
         let images_path = Path::new(&images_path);
         if !images_path.exists() {
             error!("images path not found. exiting...");

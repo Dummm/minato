@@ -8,6 +8,10 @@ use nix::unistd::{fork, ForkResult, execve, Pid};
 use nix::sched::{CloneFlags, setns};
 use clap::ArgMatches;
 
+// use nix::unistd::*;
+// use nix::fcntl::{open, OFlag};
+// use nix::sys::stat::Mode;
+
 use log::{info, error};
 
 use crate::utils;
@@ -88,12 +92,14 @@ impl<'a> ContainerManager<'a> {
     /// Call the setns syscall to enter a container's namespaces
     fn set_namespace(&self, fd: &str, flag: CloneFlags) -> Result<(), Box<dyn std::error::Error>> {
         if !Path::new(fd).exists() {
+            info!("path '{}' does not exit", fd);
             Ok(())
         } else {
             if let Err(e) = setns(File::open(fd).unwrap().as_raw_fd(), flag) {
                 info!("error setting namespace {} - {:?}: {}", fd, flag, e);
                 Ok(())
             } else {
+                info!("ns {:?} set", flag);
                 Ok(())
             }
         }
@@ -138,6 +144,33 @@ impl<'a> ContainerManager<'a> {
         };
         info!("container pid: {}", container_pid);
 
+        // info!("uid");
+        // // let uid = getuid();
+        // let uid = 0;
+        // // let newuid = self.spec.process.user.uid;
+        // let newuid = 0;
+        // let buf = format!("{} {} 1\n", newuid, uid);
+        // let fd = open("/proc/self/uid_map", OFlag::O_WRONLY, Mode::empty())?;
+        // info!("writing 'uid_map'");
+        // write(fd, buf.as_bytes())?;
+        // close(fd)?;
+
+        // // let fd = open("/proc/self/setgroups", OFlag::O_WRONLY, Mode::empty())?;
+        // // info!("writing 'deny' to setgroups");
+        // // write(fd, "deny".as_bytes())?;
+        // // close(fd)?;
+
+        // info!("gid");
+        // // let gid = getgid();
+        // let gid = 0;
+        // // let newgid = self.spec.process.user.gid;
+        // let newgid = 0;
+        // let buf = format!("{} {} 1\n", newgid, gid);
+        // let fd = open("/proc/self/gid_map", OFlag::O_WRONLY, Mode::empty())?;
+        // info!("writing 'gid_map'");
+        // write(fd, buf.as_bytes())?;
+        // close(fd)?;
+
         let mut namespaces = HashMap::new();
         namespaces.insert(CloneFlags::CLONE_NEWIPC, "ipc");
         namespaces.insert(CloneFlags::CLONE_NEWUTS, "uts");
@@ -145,7 +178,7 @@ impl<'a> ContainerManager<'a> {
         namespaces.insert(CloneFlags::CLONE_NEWPID, "pid");
         namespaces.insert(CloneFlags::CLONE_NEWNS, "mnt");
         namespaces.insert(CloneFlags::CLONE_NEWCGROUP, "cgroup");
-        namespaces.insert(CloneFlags::CLONE_NEWUSER, "user");
+        // namespaces.insert(CloneFlags::CLONE_NEWUSER, "user");
 
         let pid_path = format!("/proc/{}/ns", container_pid);
         info!("setting namespaces...");
@@ -195,11 +228,12 @@ impl<'a> ContainerManager<'a> {
 
     /// List all stored containers
     pub fn list(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let home = match dirs::home_dir() {
-            Some(path) => path,
-            None       => return Err("error getting home directory".into())
-        };
-        let containers_path = format!("{}/.minato/containers", home.display());
+        // let home = match dirs::home_dir() {
+        //     Some(path) => path,
+        //     None       => return Err("error getting home directory".into())
+        // };
+        // let containers_path = format!("{}/.minato/containers", home.display());
+        let containers_path = format!("/var/lib/minato/containers");
         let containers_path = Path::new(&containers_path);
         if !containers_path.exists() {
             error!("containers path not found. exiting...");

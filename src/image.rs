@@ -100,14 +100,15 @@ impl Image {
         info!("writing image json...");
         let image_id = utils::fix_image_id(&self.id).unwrap();
 
-        let home = match dirs::home_dir() {
-            Some(path) => path,
-            None       => return Err("error getting home directory".into())
-        };
-        let json_directory_path_str = format!(
-            "{}/.minato/images/json",
-            home.display()
-        );
+        // let home = match dirs::home_dir() {
+        //     Some(path) => path,
+        //     None       => return Err("error getting home directory".into())
+        // };
+        // let json_directory_path_str = format!(
+        //     "{}/.minato/images/json",
+        //     home.display()
+        // );
+        let json_directory_path_str = format!("/var/lib/minato/images/json");
         let json_directory_path = Path::new(json_directory_path_str.as_str());
 
         if !json_directory_path.exists() {
@@ -278,14 +279,15 @@ impl Image {
     fn delete_image_json(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("deleting image json...");
 
-        let home = match dirs::home_dir() {
-            Some(path) => path,
-            None       => return Err("error getting home directory".into())
-        };
-        let json_directory_path_str = format!(
-            "{}/.minato/images/json",
-            home.display()
-        );
+        // let home = match dirs::home_dir() {
+        //     Some(path) => path,
+        //     None       => return Err("error getting home directory".into())
+        // };
+        // let json_directory_path_str = format!(
+        //     "{}/.minato/images/json",
+        //     home.display()
+        // );
+        let json_directory_path_str = format!("/var/lib/minato/images/json");
         let json_directory_path = Path::new(json_directory_path_str.as_str());
 
         let json_name = format!(

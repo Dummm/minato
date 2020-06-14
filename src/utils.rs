@@ -5,7 +5,7 @@ use nix::sys::stat::{Mode};
 use nix::unistd::{mkdir};
 
 use structopt::StructOpt;
-use dirs;
+// use dirs;
 use log::debug;
 
 use crate::*;
@@ -76,14 +76,18 @@ pub fn split_image_id(image_id: String) -> Result<(String, String), Box<dyn std:
 }
 /// Get path to image, from the image id
 pub fn get_image_path_with_str(image_id: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let home = match dirs::home_dir() {
-        Some(path) => path,
-        None       => return Err("error getting home directory".into())
-    };
+    // let home = match dirs::home_dir() {
+    //     Some(path) => path,
+    //     None       => return Err("error getting home directory".into())
+    // };
 
+    // Ok(format!(
+    //     "{}/.minato/images/{}",
+    //     home.display(), image_id
+    // ))
     Ok(format!(
-        "{}/.minato/images/{}",
-        home.display(), image_id
+        "/var/lib/minato/images/{}",
+        image_id
     ))
 }
 /// Get path to image, from image object
@@ -94,14 +98,18 @@ pub fn get_image_path(image: &Image) -> Result<String, Box<dyn std::error::Error
 
 /// Get path to container, from the container id
 pub fn get_container_path_with_str(container_id: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let home = match dirs::home_dir() {
-        Some(path) => path,
-        None       => return Err("error getting home directory".into())
-    };
+    // let home = match dirs::home_dir() {
+    //     Some(path) => path,
+    //     None       => return Err("error getting home directory".into())
+    // };
 
+    // Ok(format!(
+    //     "{}/.minato/containers/{}",
+    //     home.display(), container_id
+    // ))
     Ok(format!(
-        "{}/.minato/containers/{}",
-        home.display(), container_id
+        "/var/lib/minato/containers/{}",
+        container_id
     ))
 }
 /// Get path to container, from imagcontainere object
@@ -159,13 +167,17 @@ pub fn print_caps() {
 
 /// Get path to socket
 pub fn get_socket_path(socket_name: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let home = match dirs::home_dir() {
-        Some(path) => path,
-        None       => return Err("error getting home directory".into())
-    };
+    // let home = match dirs::home_dir() {
+    //     Some(path) => path,
+    //     None       => return Err("error getting home directory".into())
+    // };
 
+    // Ok(format!(
+    //     "{}/.minato/{}",
+    //     home.display(), socket_name
+    // ))
     Ok(format!(
-        "{}/.minato/{}",
-        home.display(), socket_name
+        "/var/lib/minato/{}",
+        socket_name
     ))
 }
