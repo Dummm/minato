@@ -136,7 +136,7 @@ impl Container {
         //     "{}/.minato/images/",
         //     home.display()
         // );
-        debug!("{}", container_image_path.display());
+        // debug!("{}", container_image_path.display());
         let images_path = format!("/var/lib/minato/images/");
 
         let image_id = container_image_path
@@ -376,13 +376,13 @@ impl Container {
         if !Path::new("etc/resolv.conf").exists() {
             fs::File::create("etc/resolv.conf")?;
         }
-        mount(
-            Some("/etc/resolv.conf"),
-            "etc/resolv.conf",
-            None::<&str>,
-            MsFlags::MS_BIND | MsFlags::MS_NOSUID | MsFlags::MS_NODEV,
-            None::<&str>,
-        )?;
+        // mount(
+        //     Some("/etc/resolv.conf"),
+        //     "etc/resolv.conf",
+        //     None::<&str>,
+        //     MsFlags::MS_BIND | MsFlags::MS_NOSUID | MsFlags::MS_NODEV,
+        //     None::<&str>,
+        // )?;
 
         info!("prepared container networking.");
         Ok(())
@@ -496,6 +496,7 @@ impl Container {
     ///   - not mounting dev to the parent and populating /dev manually
     fn mount_container_directories(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("mounting container directories...");
+
 
         info!("mounting proc to old_proc...");
         mount(
@@ -839,7 +840,9 @@ impl Container {
         info!("cleaning up container...");
 
         // chdir("/")?;
-        self.unmount_container_filesystem()?;
+        if let Err(e) = self.unmount_container_filesystem() {
+            info!("unmounting error: {}", e);
+        };
 
         // TODO: Move code where it belongs(???)
         if true {
@@ -860,6 +863,26 @@ impl Container {
         info!("cleaned up (after) container.");
         Ok(())
     }
+
+    fn mount_volume(&self, volume: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(vol) = volume {
+            info!("mounting additional volumes...");
+
+            let volumes: Vec<&str> = vol
+                .split(':')
+                .collect();
+            info!("mounting {} to {}...", volumes[0], volumes[1]);
+            mount(
+                Some(volumes[0]),
+                volumes[1],
+                None::<&str>,
+                MsFlags::MS_BIND | MsFlags::MS_REC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_RDONLY,
+                None::<&str>,
+            )?;
+        }
+
+        Ok(())
+    }
     /// Separate run function necessary to execute a fork and cleanup
     ///
     /// Executed steps:
@@ -875,7 +898,7 @@ impl Container {
     ///     - remount proc and root
     ///     - set hostname
     ///     - execute initial command
-    fn clean_run(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
+    fn clean_run(&self, daemon: bool, volume: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
 
         debug!("uid: {} - euid: {}", Uid::current(), Uid::effective());
         debug!("gid: {} - egid: {}", Gid::current(), Gid::effective());
@@ -883,6 +906,8 @@ impl Container {
         self.mount_container_filesystem()?;
 
         self.prepare_container_mountpoint()?;
+
+        self.mount_volume(volume)?;
 
         self.prepare_container_directories()?;
 
@@ -904,13 +929,13 @@ impl Container {
     /// Executes a fork before all the steps so it works with a daemon
     ///
     /// The parent creates a pid file that is used to check the container's state
-    pub fn run(&self, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run(&self, daemon: bool, volume: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         info!("running container...");
 
         info!("executing outer fork...");
         let result = match fork() {
             Ok(ForkResult::Child) => {
-                self.clean_run(daemon)?;
+                self.clean_run(daemon, volume)?;
 
                 return Ok(());
             }

@@ -48,7 +48,7 @@ pub fn delete_network_namespace(container_id: &str) -> Result<(), Box<dyn std::e
 pub fn create_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("creating bridge...");
 
-    let host_ip = "10.1.1.1/24";
+    let host_ip = "192.168.1.10/24";
     let bridge_name = format!("{}-br0", container_id);
 
     info!("ip link add {} type bridge", bridge_name);
@@ -101,6 +101,7 @@ pub fn create_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>>
     info!("creating veth...");
 
     let veth_host = format!("{}-veth0", container_id);
+    let host_ip = "192.168.1.10/24";
     let veth_guest = format!("{}-veth1", container_id);
 
     info!("ip link add {} type veth peer name {}", veth_host, veth_guest);
@@ -111,6 +112,14 @@ pub fn create_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>>
     info!("output: {}", output.status);
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
+
+    // info!("ip addr add {} dev {}", host_ip, veth_host);
+    // let output = Command::new("ip").arg("addr").arg("add").arg(host_ip).arg("dev").arg(veth_host.clone())
+    //     .output()
+    //     .unwrap();
+    // info!("output: {}", output.status);
+    // io::stdout().write_all(&output.stdout).unwrap();
+    // io::stderr().write_all(&output.stderr).unwrap();
 
     info!("ip link set {} up", veth_host);
     let output = Command::new("ip").arg("link").arg("set").arg(veth_host).arg("up")
@@ -132,7 +141,15 @@ pub fn delete_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>>
 
     info!("ip netns exec {} ip link del {}", namespace, veth_host);
     let output = Command::new("ip").arg("netns").arg("exec").arg(namespace.clone())
-        .arg("ip").arg("link").arg("del").arg(veth_host)
+        .arg("ip").arg("link").arg("del").arg(veth_host.clone())
+        .output()
+        .unwrap();
+    info!("output: {}", output.status);
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stderr().write_all(&output.stderr).unwrap();
+
+    info!("ip link del {}", veth_host);
+    let output = Command::new("ip").arg("link").arg("del").arg(veth_host)
         .output()
         .unwrap();
     info!("output: {}", output.status);
@@ -147,7 +164,7 @@ pub fn delete_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>>
 pub fn add_veth_to_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("adding veth to bridge...");
 
-    let veth_host = format!("{}-veth0", container_id);
+    let veth_host = format!("{}-veth1", container_id);
     let bridge_name = format!("{}-br0", container_id);
 
     info!("ip link set dev {} master {}", veth_host, bridge_name);
@@ -185,7 +202,8 @@ pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Resul
     info!("adding container to network...");
 
     let namespace = format!("{}-ns", container_id);
-    let container_ip = "10.1.1.2";
+    let container_ip = "192.168.1.11/24";
+    let container_ip2 = "192.168.1.11";
     let veth_guest = format!("{}-veth1", container_id);
 
     info!("ln /proc/{}/ns/net /var/run/netns/{}", child, namespace);
@@ -193,12 +211,18 @@ pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Resul
     if !Path::new(netns_path_str).exists() {
         fs::create_dir_all(netns_path_str)?;
     }
+
+    let ns_path = format!("/var/run/netns/{}", namespace);
+    info!("{}", ns_path);
+    if let Err(e) = fs::remove_file(ns_path) {
+        info!("{}", e);
+    }
     unix::fs::symlink(
         format!("/proc/{}/ns/net", child),
         format!("/var/run/netns/{}", namespace)
     )?;
 
-    info!("ip link set {} netns", namespace);
+    info!("ip link set {} netns {}", veth_guest, namespace);
     let output = Command::new("ip").arg("link").arg("set").arg(veth_guest.clone()).arg("netns").arg(namespace.clone())
         .output()
         .unwrap();
@@ -235,7 +259,7 @@ pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Resul
 
     info!("ip netns exec {} ip route add default via {}", namespace, container_ip);
     let output = Command::new("ip").arg("netns").arg("exec").arg(namespace)
-        .arg("ip").arg("route").arg("add").arg("default").arg("via").arg(container_ip)
+        .arg("ip").arg("route").arg("add").arg("default").arg("via").arg(container_ip2)
         .output()
         .unwrap();
     info!("output: {}", output.status);

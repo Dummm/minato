@@ -61,12 +61,12 @@ impl<'a> ContainerManager<'a> {
 
     #[allow(dead_code)]
     /// Run a stored container using arguments passed to the executable as parameters
-    pub fn run_with_args(&self, args: &ArgMatches, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run_with_args(&self, args: &ArgMatches, daemon: bool, volume: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         let container_name = args.value_of("container-name").unwrap();
-        self.run(container_name, daemon)
+        self.run(container_name, daemon, volume)
     }
     /// Run a stored container
-    pub fn run(&self, container_name: &str, daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run(&self, container_name: &str, daemon: bool, volume: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         info!("running container '{}'...", container_name);
 
         info!("loading container...");
@@ -84,7 +84,7 @@ impl<'a> ContainerManager<'a> {
             return Ok(())
         }
 
-        container.run(daemon)?;
+        container.run(daemon, volume)?;
         info!("ran container.");
         Ok(())
     }

@@ -187,6 +187,11 @@ enum ContainerAction {
             about = "Container name",
             short = "c", long = "container-name")]
         container_name: String,
+
+        #[structopt(name = "volume",
+            about = "Bind volume to container",
+            short = "v", long = "volume")]
+        volume: Option<String>,
     },
 
     #[structopt(name = "open", about = "Open a container")]
@@ -236,7 +241,8 @@ impl FromStr for ContainerAction {
             ),
             Some('R') => Ok(
                 ContainerAction::Run {
-                    container_name: String::from(container_name)
+                    container_name: String::from(container_name),
+                    volume: Some(String::from(image_id))
                 }
             ),
             Some('D') => Ok(

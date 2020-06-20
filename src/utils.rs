@@ -31,7 +31,7 @@ pub fn run_command(opt: Opt, image_manager: &ImageManager, container_manager: &C
         },
         Some(Subcommand::Container  { action }) => match action {
             ContainerAction::Create { container_name, image_id } => container_manager.create(&container_name, &image_id),
-            ContainerAction::Run    { container_name }           => container_manager.run(&container_name, opt.daemon),
+            ContainerAction::Run    { container_name, volume }   => container_manager.run(&container_name, opt.daemon, volume),
             ContainerAction::Open   { container_name }           => container_manager.open(&container_name),
             ContainerAction::Stop   { container_name }           => container_manager.stop(&container_name),
             ContainerAction::List                                => container_manager.list(),
