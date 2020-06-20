@@ -48,7 +48,8 @@ pub fn delete_network_namespace(container_id: &str) -> Result<(), Box<dyn std::e
 pub fn create_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("creating bridge...");
 
-    let host_ip = "192.168.1.10/24";
+    // let host_ip = "192.168.1.10/24";
+    let host_ip = "10.1.0.1/16";
     let bridge_name = format!("{}-br0", container_id);
 
     info!("ip link add {} type bridge", bridge_name);
@@ -101,7 +102,7 @@ pub fn create_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>>
     info!("creating veth...");
 
     let veth_host = format!("{}-veth0", container_id);
-    let host_ip = "192.168.1.10/24";
+    // let host_ip = "192.168.1.10/24";
     let veth_guest = format!("{}-veth1", container_id);
 
     info!("ip link add {} type veth peer name {}", veth_host, veth_guest);
@@ -164,7 +165,7 @@ pub fn delete_veth(container_id: &str) -> Result<(), Box<dyn std::error::Error>>
 pub fn add_veth_to_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("adding veth to bridge...");
 
-    let veth_host = format!("{}-veth1", container_id);
+    let veth_host = format!("{}-veth0", container_id);
     let bridge_name = format!("{}-br0", container_id);
 
     info!("ip link set dev {} master {}", veth_host, bridge_name);
@@ -202,8 +203,10 @@ pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Resul
     info!("adding container to network...");
 
     let namespace = format!("{}-ns", container_id);
-    let container_ip = "192.168.1.11/24";
-    let container_ip2 = "192.168.1.11";
+    // let container_ip = "192.168.1.11/24";
+    // let container_ip2 = "192.168.1.11";
+    let container_ip = "10.1.0.2/16";
+    let container_ip2 = "10.1.0.1";
     let veth_guest = format!("{}-veth1", container_id);
 
     info!("ln /proc/{}/ns/net /var/run/netns/{}", child, namespace);

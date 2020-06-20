@@ -364,13 +364,13 @@ impl Container {
         if !Path::new("etc/hosts").exists() {
             fs::File::create("etc/hosts")?;
         }
-        mount(
-            Some("/etc/hosts"),
-            "etc/hosts",
-            None::<&str>,
-            MsFlags::MS_BIND | MsFlags::MS_NOSUID | MsFlags::MS_NODEV,
-            None::<&str>,
-        )?;
+        // mount(
+        //     Some("/etc/hosts"),
+        //     "etc/hosts",
+        //     None::<&str>,
+        //     MsFlags::MS_BIND | MsFlags::MS_NOSUID | MsFlags::MS_NODEV,
+        //     None::<&str>,
+        // )?;
 
         info!("binding to parent resolv.conf...");
         if !Path::new("etc/resolv.conf").exists() {

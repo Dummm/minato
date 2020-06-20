@@ -178,7 +178,7 @@ impl<'a> ContainerManager<'a> {
         namespaces.insert(CloneFlags::CLONE_NEWPID, "pid");
         namespaces.insert(CloneFlags::CLONE_NEWNS, "mnt");
         namespaces.insert(CloneFlags::CLONE_NEWCGROUP, "cgroup");
-        // namespaces.insert(CloneFlags::CLONE_NEWUSER, "user");
+        namespaces.insert(CloneFlags::CLONE_NEWUSER, "user");
 
         let pid_path = format!("/proc/{}/ns", container_pid);
         info!("setting namespaces...");
