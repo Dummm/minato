@@ -32,4 +32,4 @@ The program has been developed and tested only on Linux 5.7 and Rust 1.40.
 
 ##### Disclamer
 Currently, this tool is too unstable for normal use.
-Besides that, it could be useful as a starting point for a more advanced virtualization tool or as an educational material on virtualization.
+Besides that, it could be useful as a starting point for a more advanced virtualization tool or as educational material on virtualization.
