@@ -295,7 +295,6 @@ fn option_from_str(option: &str) ->  Option<String> {
 
 /**
  * * General
- *   TODO: DOCUMANTATIE
  *   TODO: Add .minato folder creation
  *   TODO: Add tini-static automatic download from github
  *   TODO: Add UI
