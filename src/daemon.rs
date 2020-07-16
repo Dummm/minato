@@ -109,8 +109,9 @@ impl<'a> Daemon<'a> {
 
                     match self.handle_client(stream) {
                         Ok(_) => {},
-                        Err(_) =>  {
-                            info!("stopping daemon...");
+                        Err(e) =>  {
+                            info!("error handling client: {}", e);
+                            // info!("stopping daemon...");
                             break;
                         }
                     };

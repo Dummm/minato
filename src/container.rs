@@ -711,11 +711,11 @@ impl Container {
 
                 info!("inner fork child pid: {}", child);
 
-                if !daemon {
+                // if !daemon {
                     info!("waiting for child...");
                     waitpid(child, None)?;
                     exit(0);
-                }
+                // }
             }
             Err(e) => error!("inner fork error: {}", e)
         };
@@ -929,7 +929,7 @@ impl Container {
     /// Executes a fork before all the steps so it works with a daemon
     ///
     /// The parent creates a pid file that is used to check the container's state
-    pub fn run(&self, daemon: bool, volume: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run(&self, daemon: bool, volume: Option<String>, host_ip: Option<String>, container_ip: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         info!("running container...");
 
         info!("executing outer fork...");
@@ -943,13 +943,13 @@ impl Container {
                 info!("outer fork child pid: {}", child);
 
                 // TODO: Add iproute2 check
-                if true {
+                if host_ip.is_some() && container_ip.is_some() {
                 // if false {
                     // networking::create_network_namespace(&container.id)?;
-                    networking::create_bridge(&self.id)?;
+                    networking::create_bridge(&self.id, &host_ip.unwrap())?;
                     networking::create_veth(&self.id)?;
                     networking::add_veth_to_bridge(&self.id)?;
-                    networking::add_container_to_network(&self.id, child)?;
+                    networking::add_container_to_network(&self.id, child, &container_ip.unwrap())?;
                 }
 
                 info!("writing pid file...");
@@ -987,10 +987,10 @@ impl Container {
                 //         };
                 //     });
 
-                if !daemon {
+                // if !daemon {
                     waitpid(child, None)?;
                     // exit(0);
-                }
+                // }
 
                 Ok(())
             }

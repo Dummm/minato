@@ -61,12 +61,12 @@ impl<'a> ContainerManager<'a> {
 
     #[allow(dead_code)]
     /// Run a stored container using arguments passed to the executable as parameters
-    pub fn run_with_args(&self, args: &ArgMatches, daemon: bool, volume: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run_with_args(&self, args: &ArgMatches, daemon: bool, volume: Option<String>, host_ip: Option<String>, container_ip: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         let container_name = args.value_of("container-name").unwrap();
-        self.run(container_name, daemon, volume)
+        self.run(container_name, daemon, volume, host_ip, container_ip)
     }
     /// Run a stored container
-    pub fn run(&self, container_name: &str, daemon: bool, volume: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run(&self, container_name: &str, daemon: bool, volume: Option<String>, host_ip: Option<String>, container_ip: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         info!("running container '{}'...", container_name);
 
         info!("loading container...");
@@ -84,13 +84,15 @@ impl<'a> ContainerManager<'a> {
             return Ok(())
         }
 
-        container.run(daemon, volume)?;
+        container.run(daemon, volume, host_ip, container_ip)?;
         info!("ran container.");
         Ok(())
     }
 
     /// Call the setns syscall to enter a container's namespaces
     fn set_namespace(&self, fd: &str, flag: CloneFlags) -> Result<(), Box<dyn std::error::Error>> {
+        // while !Path::new(fd).exists() {;}
+
         if !Path::new(fd).exists() {
             info!("path '{}' does not exit", fd);
             Ok(())

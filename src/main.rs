@@ -1,4 +1,5 @@
 use std::process::exit;
+use std::option::Option;
 use std::str::FromStr;
 use regex::Regex;
 
@@ -192,6 +193,16 @@ enum ContainerAction {
             about = "Bind volume to container",
             short = "v", long = "volume")]
         volume: Option<String>,
+
+        #[structopt(name = "host-ip",
+            about = "IP address for host-to-container communication",
+            short = "H", long = "host-ip")]
+        host_ip: Option<String>,
+
+        #[structopt(name = "container-ip",
+            about = "IP address for container-to-host communication",
+            short = "C", long = "container-ip")]
+        container_ip: Option<String>,
     },
 
     #[structopt(name = "open", about = "Open a container")]
@@ -225,29 +236,42 @@ impl FromStr for ContainerAction {
     type Err = std::io::Error;
 
     fn from_str(opt_str: &str) ->  Result<Self, Self::Err> {
-        let regex_str = r####"(?:Container \{ action: )(Create|Run|Delete)(?: \{ container_name: ")(.+)(?:", image_id: ")*(.*)(?:" \} \})"####;
+        let regex_str = r####"(?:Container \{ action: )(Create(?: \{ container_name: ")(.[^"]+)(?:", image_id: ")*(.[^"]+)|Run(?: \{ container_name: ")(.[^"]+)"(?:, volume: (Some\(".+"\)|None))(?:, host_ip: (Some\(".+"\)|None))(?:, container_ip: (Some\(".+"\)|None))|Stop(?: \{ container_name: ")(.[^"]+)"|Delete(?: \{ container_name: ")(.[^"]+)")(?: \} \})"####;
         let regex = Regex::new(regex_str).unwrap();
         let matches = regex.captures(opt_str).unwrap();
-        let action         = matches.get(1).map_or("", |m| m.as_str());
-        let container_name = matches.get(2).map_or("", |m| m.as_str());
-        let image_id       = matches.get(3).map_or("", |m| m.as_str());
+        let action                = matches.get(1).map_or("", |m| m.as_str());
+        let create_container_name = matches.get(2).map_or("", |m| m.as_str());
+        let create_image_id       = matches.get(3).map_or("", |m| m.as_str());
+        let run_container_name    = matches.get(4).map_or("", |m| m.as_str());
+        let run_volume            = matches.get(5).map_or("", |m| m.as_str());
+        let run_host_ip           = matches.get(6).map_or("", |m| m.as_str());
+        let run_container_ip      = matches.get(7).map_or("", |m| m.as_str());
+        let stop_container_name   = matches.get(8).map_or("", |m| m.as_str());
+        let delete_container_name = matches.get(9).map_or("", |m| m.as_str());
 
         match action.chars().next() {
             Some('C') => Ok(
                 ContainerAction::Create {
-                    container_name: String::from(container_name),
-                    image_id: String::from(image_id)
+                    container_name: String::from(create_container_name),
+                    image_id:       String::from(create_image_id)
                 }
             ),
             Some('R') => Ok(
                 ContainerAction::Run {
-                    container_name: String::from(container_name),
-                    volume: Some(String::from(image_id))
+                    container_name: String::from(run_container_name),
+                    volume:         option_from_str(run_volume),
+                    host_ip:        option_from_str(run_host_ip),
+                    container_ip:   option_from_str(run_container_ip)
+                }
+            ),
+            Some('S') => Ok(
+                ContainerAction::Stop {
+                    container_name: String::from(stop_container_name)
                 }
             ),
             Some('D') => Ok(
                 ContainerAction::Delete {
-                    container_name: String::from(container_name)
+                    container_name: String::from(delete_container_name)
                 }
             ),
             _ => Err(
@@ -255,6 +279,17 @@ impl FromStr for ContainerAction {
             )
         }
     }
+}
+fn option_from_str(option: &str) ->  Option<String> {
+    let regex_str = r####"(?:Some\("(.+)"\))"####;
+    let regex = Regex::new(regex_str).unwrap();
+    let matches = regex.captures(option);
+    if let None = matches {
+        return None
+    }
+    let string = matches.unwrap()
+        .get(1).map_or("", |m| m.as_str());
+    return Some(String::from(string));
 }
 
 

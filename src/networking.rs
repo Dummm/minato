@@ -45,12 +45,13 @@ pub fn delete_network_namespace(container_id: &str) -> Result<(), Box<dyn std::e
 // TODO: Replace hardcode
 // TODO: Combine command arguments
 /// Create network bridge
-pub fn create_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn create_bridge(container_id: &str, host_ip: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("creating bridge...");
 
-    // let host_ip = "192.168.1.10/24";
-    let host_ip = "10.1.0.1/16";
-    let bridge_name = format!("{}-br0", container_id);
+    // // let host_ip = "192.168.1.10/24";
+    // let host_ip = "10.1.0.1/16";
+    // let bridge_name = format!("{}-br0", container_id);
+    let bridge_name = "br0";
 
     info!("ip link add {} type bridge", bridge_name);
     let output = Command::new("ip").arg("link").arg("add").arg(bridge_name.clone()).arg("type").arg("bridge")
@@ -83,7 +84,8 @@ pub fn create_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error
 pub fn delete_bridge(container_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("deleting bridge...");
 
-    let bridge_name = format!("{}-br0", container_id);
+    // let bridge_name = format!("{}-br0", container_id);
+    let bridge_name = "br0";
 
     info!("ip link del name {}", bridge_name);
     let output = Command::new("ip").arg("link").arg("del").arg("name").arg(bridge_name)
@@ -166,7 +168,8 @@ pub fn add_veth_to_bridge(container_id: &str) -> Result<(), Box<dyn std::error::
     info!("adding veth to bridge...");
 
     let veth_host = format!("{}-veth0", container_id);
-    let bridge_name = format!("{}-br0", container_id);
+    // let bridge_name = format!("{}-br0", container_id);
+    let bridge_name = "br0";
 
     info!("ip link set dev {} master {}", veth_host, bridge_name);
     let output = Command::new("ip").arg("link").arg("set").arg("dev").arg(veth_host).arg("master").arg(bridge_name)
@@ -199,14 +202,17 @@ pub fn remove_veth_from_bridge(container_id: &str) -> Result<(), Box<dyn std::er
 
 #[allow(dead_code)]
 /// Add the container to the network namespace
-pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Result<(), Box<dyn std::error::Error>> {
+pub fn add_container_to_network(container_id: &str, child: unistd::Pid, container_ip: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("adding container to network...");
 
     let namespace = format!("{}-ns", container_id);
     // let container_ip = "192.168.1.11/24";
     // let container_ip2 = "192.168.1.11";
-    let container_ip = "10.1.0.2/16";
-    let container_ip2 = "10.1.0.1";
+    // let container_ip2 = "10.1.0.2/16";
+    let container_ip2 = &container_ip
+        .split('/')
+        .map(|str| String::from(str))
+        .collect::<Vec<String>>()[0];
     let veth_guest = format!("{}-veth1", container_id);
 
     info!("ln /proc/{}/ns/net /var/run/netns/{}", child, namespace);
@@ -260,7 +266,7 @@ pub fn add_container_to_network(container_id: &str, child: unistd::Pid) -> Resul
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 
-    info!("ip netns exec {} ip route add default via {}", namespace, container_ip);
+    info!("ip netns exec {} ip route add default via {}", namespace, container_ip2);
     let output = Command::new("ip").arg("netns").arg("exec").arg(namespace)
         .arg("ip").arg("route").arg("add").arg("default").arg("via").arg(container_ip2)
         .output()
